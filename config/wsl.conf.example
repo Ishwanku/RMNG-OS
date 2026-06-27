@@ -1,0 +1,11 @@
+# /etc/wsl.conf — copy to /etc/wsl.conf inside your WSL distro (requires wsl --shutdown)
+[boot]
+systemd=true
+
+[user]
+default=YOUR_USERNAME
+
+[automount]
+enabled = true
+options = "metadata,case=off"
+mountFsTab = true

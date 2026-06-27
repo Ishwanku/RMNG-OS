@@ -1,0 +1,6 @@
+# --- Kernel build / ccache (append to ~/.bashrc) ---
+export CCACHE_DIR="$HOME/.ccache"
+export CC="ccache gcc"
+export CXX="ccache g++"
+export PATH="/usr/lib/ccache:$PATH"
+ccache --max-size=10G 2>/dev/null

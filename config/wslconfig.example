@@ -1,0 +1,7 @@
+# C:\Users\YOUR_USERNAME\.wslconfig — Windows-side WSL2 limits (requires wsl --shutdown)
+[wsl2]
+memory=12GB
+processors=6
+swap=6GB
+localhostForwarding=true
+debugConsole=false

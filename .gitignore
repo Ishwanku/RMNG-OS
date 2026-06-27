@@ -1,0 +1,41 @@
+# --- Kernel build artifacts ---
+build/
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+.*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+vmlinux
+vmlinux.o
+vmlinux.unstripped
+bzImage
+System.map
+*.symvers
+
+# --- Kernel source (clone separately) ---
+linux/
+dev/kernel/linux/
+
+# --- ccache ---
+.ccache/
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# --- Logs and temp ---
+*.log
+*.tmp
+*.bak
+
+# --- Secrets ---
+.env
+*.pem
+id_rsa*
