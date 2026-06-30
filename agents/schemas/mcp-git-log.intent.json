@@ -1,0 +1,9 @@
+{
+  "action": "mcp.proxy",
+  "mcp_server": "git",
+  "mcp_tool": "git.log",
+  "mcp_args": {
+    "repo_path": "/home/saini/dev/projects/RMNG-OS",
+    "max_count": 3
+  }
+}

@@ -11,6 +11,7 @@ Restart=on-failure
 RestartSec=3
 Environment=RUST_LOG=info
 Environment=RMNG_PROJECT_ROOT=%h/dev/projects/RMNG-OS
+Environment=PATH=%h/.cargo/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 [Install]
 WantedBy=default.target

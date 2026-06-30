@@ -1,17 +1,13 @@
 [package]
-name = "rmng-core"
-description = "RMNG-OS agent runtime library"
+name = "rmng-mcp"
+description = "RMNG-OS MCP stdio bridge — spawns allowlisted servers and proxies tools/call"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-rmng-mcp = { path = "../rmng-mcp" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tracing.workspace = true
-uuid.workspace = true
-chrono.workspace = true
 tokio.workspace = true
-toml.workspace = true
+tracing.workspace = true

@@ -900,6 +900,7 @@ name = "rmng-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "rmng-mcp",
  "serde",
  "serde_json",
  "thiserror",
@@ -907,6 +908,17 @@ dependencies = [
  "toml",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "rmng-mcp"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

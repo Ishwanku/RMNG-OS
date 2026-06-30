@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use rmng_core::{
-    daemon_running, send_intent_json, HandleResponse, Intent, PermissionGate, PermissionVerdict,
-    RmngConfig, Runtime, socket_path,
+    daemon_running, parse_incoming, send_intent_json, HandleResponse, Intent, PermissionGate,
+    PermissionVerdict, RmngConfig, Runtime, socket_path,
 };
 use rmng_nervous::NervousConnector;
 
@@ -123,8 +123,15 @@ async fn main() {
                 1
             } else {
                 let json = std::fs::read_to_string(&file).expect("read intent file");
-                let intent = Intent::parse(&json).expect("valid intent");
-                let compact = serde_json::to_string(&intent).expect("serialize intent");
+                let incoming = parse_incoming(&json).expect("valid intent");
+                let compact = match &incoming {
+                    rmng_core::IncomingIntent::V1(intent) => {
+                        serde_json::to_string(intent).expect("serialize intent")
+                    }
+                    rmng_core::IncomingIntent::Core(intent) => {
+                        serde_json::to_string(intent).expect("serialize core intent")
+                    }
+                };
                 match send_intent_json(&compact).await {
                     Ok(line) => {
                         let resp: HandleResponse = serde_json::from_str(line.trim())

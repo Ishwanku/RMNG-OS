@@ -1,4 +1,4 @@
-use rmng_core::{Intent, Runtime};
+use rmng_core::{parse_incoming, Runtime};
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
@@ -15,8 +15,8 @@ async fn handle_connection(stream: tokio::net::UnixStream, runtime: Runtime) {
         if line.trim().is_empty() {
             continue;
         }
-        let response = match Intent::parse(&line) {
-            Ok(intent) => match runtime.handle_response(&intent).await {
+        let response = match parse_incoming(&line) {
+            Ok(incoming) => match runtime.handle_incoming(&incoming).await {
                 Ok(resp) => serde_json::to_string(&resp).unwrap_or_else(|e| {
                     serde_json::to_string(&rmng_core::HandleResponse::failure(e.to_string()))
                         .unwrap()

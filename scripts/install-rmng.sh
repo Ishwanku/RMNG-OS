@@ -23,6 +23,9 @@ if [[ ! -f "${CONFIG_DIR}/config.toml" ]]; then
   echo "Created ${CONFIG_DIR}/config.toml (llm_provider = none)"
 fi
 
+echo "=== Installing MCP allowlist ==="
+"${ROOT}/scripts/setup-mcp-allowlist.sh"
+
 echo "=== Installing systemd user unit ==="
 mkdir -p "${HOME}/.config/systemd/user"
 cp "${UNIT_SRC}" "${UNIT_DST}"

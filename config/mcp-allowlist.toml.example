@@ -1,0 +1,14 @@
+# Copy to ~/.rmng/mcp-allowlist.toml — never commit tokens or machine-specific paths
+# Run: ./scripts/setup-mcp-allowlist.sh
+
+[servers.github]
+enabled = true
+command = "npx"
+args = ["@github/github-mcp-server"]
+allowed_tools = ["get_issue", "create_issue"]
+
+[servers.git]
+enabled = true
+command = "uvx"
+args = ["mcp-server-git"]
+allowed_tools = ["git.log"]
