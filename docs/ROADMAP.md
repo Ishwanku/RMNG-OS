@@ -107,10 +107,10 @@ Goal: Implement Rust runtime with nervous-system / body separation. See [VISION.
 | Task | Notes |
 |------|-------|
 | `agents/` runtime scaffold | 🔄 Rust workspace (`rmng-core`, `rmng-cli`, `rmngd`) |
-| `integrations/` adapter layout | 🔄 `schemas/` intent v1 |
+| `integrations/` adapter layout | 🔄 `integrations/dev/kernel.json` |
 | Ollama nervous-system adapter | 🔄 `rmng-nervous` + `rmng ask` |
 | External API adapter (pluggable) | OpenAI/Anthropic — intents only |
-| `rmng` CLI + `rmngd` daemon | 🔄 `run`, `ask`, Unix socket |
+| `rmng` CLI + `rmngd` daemon | ✅ `run`, `send`, IPC socket |
 | Permission gate + audit log | ✅ Gate + `~/.rmng/logs/audit.jsonl` |
 | `gh auth login` in WSL | Git push from Ubuntu |
 

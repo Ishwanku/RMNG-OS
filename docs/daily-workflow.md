@@ -111,6 +111,8 @@ cargo build
 
 rmng status
 rmng tools
+rmngd &
+rmng send -f schemas/kernel-status.intent.json
 rmng run -f schemas/kernel-status.intent.json
 
 # With Ollama running:
