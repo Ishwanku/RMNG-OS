@@ -11,6 +11,7 @@ Central index for all project documentation. Start here when onboarding or shari
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Engineering | Functional & non-functional requirements |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Engineering | Technical design and components |
 | [ROADMAP.md](ROADMAP.md) | Planning | Phased delivery timeline |
+| [PLAN-AGENTS-MCP-SKILLS.md](PLAN-AGENTS-MCP-SKILLS.md) | Architecture | Agents, skills, MCP adoption plan |
 | [setup.md](setup.md) | Operators | WSL environment install guide |
 | [daily-workflow.md](daily-workflow.md) | Developers | Day-to-day commands |
 | [experiments/phase3-validation-20260630.md](experiments/phase3-validation-20260630.md) | Kernel dev | Phase 3 RMNG identity validation |
@@ -48,7 +49,8 @@ RMNG-OS/
 ├── scripts/        ← automation
 ├── patches/        ← kernel patch series
 ├── config/         ← kernel & WSL templates
-├── agents/         ← future agent runtime
+├── skills/         ← nervous-system skill guides
+├── agents/         ← Rust runtime + definitions
 └── integrations/   ← future workflow adapters
 ```
 

@@ -114,6 +114,16 @@ Goal: Implement Rust runtime with nervous-system / body separation. See [VISION.
 | Permission gate + audit log | ✅ Gate + `~/.rmng/logs/audit.jsonl` |
 | `gh auth login` in WSL | Git push from Ubuntu |
 
+## Phase 6 — Skills, MCP & Integrations (PLANNED)
+
+**Plan:** [PLAN-AGENTS-MCP-SKILLS.md](PLAN-AGENTS-MCP-SKILLS.md) · **ADR:** [ADR-014](DECISIONS.md)
+
+| Sub-phase | Goal |
+|-----------|------|
+| **6a** | Skills (`skills/`) + dev MCP template + `setup-dev-mcp.sh` |
+| **6b** | `rmng-mcp` bridge (rust-sdk) + allowlist |
+| **6c** | `rmng ask --skill` nervous-system integration |
+
 ## Phase 6 — Workflow Integrations
 
 | Domain | Priority |

@@ -1,0 +1,34 @@
+{
+  "_comment": "Copy to ~/.cursor/mcp.json or ~/.config/rmng/mcp-dev.json — never commit tokens",
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/home/REPLACE_USER/dev/projects/RMNG-OS",
+        "/home/REPLACE_USER/dev/kernel/linux",
+        "/home/REPLACE_USER/build/kernel"
+      ]
+    },
+    "git": {
+      "command": "uvx",
+      "args": ["mcp-server-git", "--repository", "/home/REPLACE_USER/dev/projects/RMNG-OS"]
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@github/github-mcp-server"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "FROM_GH_AUTH_TOKEN"
+      }
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    }
+  }
+}
