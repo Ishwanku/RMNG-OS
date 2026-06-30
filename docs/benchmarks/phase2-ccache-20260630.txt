@@ -1,0 +1,26 @@
+=== RMNG-OS ccache Incremental Benchmark ===
+Date: 2026-06-30T10:15:58+00:00
+KSRC: /home/saini/dev/kernel/linux
+KBUILD: /home/saini/build/kernel
+
+--- Touch target ---
+-rw-r--r-- 1 saini saini 42540 Jun 30 10:15 /home/saini/dev/kernel/linux/init/main.c
+
+--- ccache BEFORE ---
+Cacheable calls:   13047 / 17216 (75.78%)
+  Hits:              564 / 13047 ( 4.32%)
+    Direct:          341 /   564 (60.46%)
+    Preprocessed:    223 /   564 (39.54%)
+  Misses:          12483 / 13047 (95.68%)
+Uncacheable calls:  4169 / 17216 (24.22%)
+Local storage:
+  Cache size (GB):   2.2 /  10.0 (22.22%)
+  Hits:              564 / 13047 ( 4.32%)
+  Misses:          12483 / 13047 (95.68%)
+
+--- Incremental build (make -j6) ---
+make: Entering directory '/home/saini/dev/kernel/linux'
+make[1]: Entering directory '/home/saini/build/kernel'
+  UPD     include/config/kernel.release
+make[1]: Leaving directory '/home/saini/build/kernel'
+make: Leaving directory '/home/saini/dev/kernel/linux'

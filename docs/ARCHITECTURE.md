@@ -143,10 +143,19 @@ flowchart TB
 
 ## 4. Layer 3 — Integrations (planned)
 
-### 4.1 Adapter pattern
+### 4.1 Adapter pattern (Rust — ADR-009)
+
+```rust
+// Conceptual interface — implemented in integrations/ as Rust crates
+pub trait Integration {
+    fn name(&self) -> &str;
+    fn tools(&self) -> &[ToolDef];
+    fn execute(&self, tool: &str, params: &serde_json::Value, ctx: &RuntimeContext) -> Result<ToolResult>;
+}
+```
 
 ```python
-# Conceptual interface (language TBD — see REQUIREMENTS Q-01)
+# Legacy sketch (superseded by Rust)
 class Integration:
     name: str
     version: str
@@ -175,26 +184,54 @@ class Tool:
 
 ## 5. Layer 4 — Agent orchestration (planned)
 
+### 5.0 Biological separation model (ADR-010 — locked)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  NERVOUS SYSTEM — Reasoning (pluggable, local-first)          │
+│  Ollama (default) · OpenAI · Anthropic · other APIs          │
+│  Output: structured JSON intents ONLY                        │
+│  PROHIBITED: terminal access, tool exec, state writes        │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ strict JSON schema / IPC
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  HEART + BRAINS — Local Rust runtime (rmngd)                │
+│  Intent parser · permission gate · memory · orchestrator      │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ authorized dispatch only
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  BODY — integrations/ tool execution                       │
+│  git · build · files · shell (allowlisted) · network       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Runtime language:** Rust (ADR-009). **Interface:** CLI-first (ADR-011).
+
 ### 5.1 Request flow
 
 ```mermaid
 sequenceDiagram
     participant User
     participant CLI as rmng CLI
-    participant Router as Agent Router
-    participant Agent as Specialist Agent
-    participant Tools as Integration Tools
-    participant LLM as LLM Backend
+    participant Runtime as Rust Runtime (Heart/Brains)
+    participant LLM as Nervous System (LLM)
+    participant Tools as integrations/ (Body)
 
     User->>CLI: natural language request
-    CLI->>Router: route(task)
-    Router->>Agent: delegate
-    Agent->>LLM: plan + tool selection
-    LLM-->>Agent: tool calls
-    Agent->>Tools: execute (with permission check)
-    Tools-->>Agent: results
-    Agent->>LLM: synthesize response
-    Agent-->>User: result
+    CLI->>Runtime: submit task
+    Runtime->>LLM: context + planning prompt
+    LLM-->>Runtime: JSON intents only
+    Runtime->>Runtime: schema validate + permission check
+    alt approved
+        Runtime->>Tools: execute tool
+        Tools-->>Runtime: results
+    else denied
+        Runtime-->>CLI: policy rejection
+    end
+    Runtime->>LLM: optional synthesis (reasoning only)
+    Runtime-->>User: result via CLI
 ```
 
 ### 5.2 Permission model (draft)

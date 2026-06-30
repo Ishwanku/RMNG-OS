@@ -146,10 +146,124 @@ Add `agents/` and `integrations/` with README placeholders only.
 
 ---
 
+## ADR-009: Agent runtime language — Rust
+
+**Date:** 2026-06-30  
+**Status:** **Locked**
+
+### Context
+Phase 5 requires a native agent runtime integrated with the OS: tool execution, permission gates, memory stores, IPC boundaries, and multi-agent orchestration. The runtime must coexist with kernel-level workflows and long-running daemons without unpredictable latency.
+
+### Decision
+Implement the agent runtime in **Rust**.
+
+### Justification
+- **Performance:** Native code with zero-cost abstractions; suitable for hot-path tool dispatch and IPC without interpreter overhead.
+- **Memory safety:** Ownership model prevents use-after-free and data races in concurrent agent orchestration without a GC.
+- **No GC pauses:** Unlike Python or Node, Rust has no garbage collector — critical for a system daemon that must not stall tool execution or permission checks.
+- **Low-level OS integration:** FFI to libc, systemd, eBPF hooks, and future bare-metal components without leaving the systems language domain.
+- **Strong typing + schema validation:** `serde` + JSON Schema align with the strict intent boundary (ADR-010).
+
+### Consequences
+- ✅ Runtime suitable for `rmngd` system daemon and permission gate
+- ✅ Single binary deployment per component
+- ⚠️ Steeper initial development curve
+- ⚠️ LLM bridge may use thin HTTP client crates; reasoning stays outside runtime control flow
+
+---
+
+## ADR-010: Hybrid LLM architecture — Nervous System / Body separation
+
+**Date:** 2026-06-30  
+**Status:** **Locked**
+
+### Context
+RMNG-OS is AI Agent-first but must not surrender OS sovereignty to external providers. External LLMs are powerful reasoning engines but must not execute commands, hold authoritative state, or bypass permission policy.
+
+### Decision
+Adopt a **hybrid, local-first LLM architecture** with strict biological separation:
+
+| Role | Metaphor | Responsibility | Runs |
+|------|----------|----------------|------|
+| **Reasoning layer** | Nervous System | Planning, intent generation, language | Local (Ollama default) or external API (pluggable) |
+| **Execution layer** | Body | Tool execution, syscalls, shell (gated) | Local Rust runtime only |
+| **State & policy** | Heart + Brains | Memory, permissions, sandbox, orchestration | Local Rust processes only |
+
+**Default:** local models via Ollama (or equivalent). External APIs (OpenAI, Anthropic, etc.) are optional **reasoning backends only**.
+
+### IPC / schema boundary (mandatory)
+
+1. LLM outputs **structured intents only** — strict JSON payloads validated against versioned schemas.
+2. The **Rust runtime** is the **sole authority** that:
+   - Parses intents
+   - Verifies permissions
+   - Translates approved intents into system calls or allowlisted commands
+3. **Prohibited:** LLM direct terminal access, raw shell execution, state mutation, or permission changes.
+4. **Swappable reasoning:** Replacing Ollama with an external API changes only the nervous-system adapter; Body/Heart/Brains components are unchanged.
+
+### Justification
+- Preserves OS sovereignty and auditability
+- Enables offline-first operation
+- Prevents prompt-injection from becoming arbitrary code execution
+- Cloud models usable for hard reasoning without trusting them with the machine
+
+### Consequences
+- ✅ `integrations/` enforces rigid JSON contract at the boundary
+- ✅ Permission model is non-bypassable by LLM layer
+- ⚠️ Requires schema versioning and intent validation crate in Rust
+- ⚠️ External API keys stored in local secure store only
+
+---
+
+## ADR-011: Primary interface — CLI-first
+
+**Date:** 2026-06-30  
+**Status:** **Locked**
+
+### Context
+RMNG-OS must be operable by developers and agents alike. The interface layer precedes any graphical shell.
+
+### Decision
+**CLI-first** interface (`rmng` command) as the primary user and automation surface.
+
+### Justification
+- **Unix philosophy:** Compose small tools; pipe agent output to standard utilities.
+- **Agent parity:** Background `rmngd` daemon and CLI share the same IPC — agents and humans use identical pathways.
+- **Scriptability:** Kernel lab workflows are already terminal-native; CLI extends naturally.
+- **Lower complexity:** Defers TUI/web until Layer 2–4 stabilize.
+
+### Consequences
+- ✅ Phase 5 delivers `rmng` + `rmngd` before any GUI
+- ✅ All integrations expose CLI-invokable tools
+- ⚠️ Web dashboard deferred to Phase 7+
+
+---
+
+## ADR-012: Bare-metal boot timeline — Phase 4
+
+**Date:** 2026-06-30  
+**Status:** **Locked**
+
+### Context
+RMNG-OS currently targets WSL2. Bare-metal boot forces early consideration of real hardware: firmware, drivers, init, and agent daemon startup order.
+
+### Decision
+Schedule **bare-metal boot capability in Phase 4** (Advanced Kernel), before full agent orchestration (Phase 7) but after RMNG kernel identity (Phase 3).
+
+### Justification
+- Validates kernel configs against real hardware constraints
+- Surfaces driver and firmware issues before agent layer depends on them
+- Provides non-WSL deployment path for production RMNG-OS
+
+### Consequences
+- ✅ Phase 4 explicitly includes bootable kernel + initramfs work
+- ⚠️ WSL remains primary dev target through Phase 3
+- ⚠️ May require separate hardware test machine or VM with PCI passthrough
+
+---
+
 ## Pending decisions
 
 | ADR | Topic | Options |
 |-----|-------|---------|
-| ADR-009 | Agent runtime language | Python · Rust · TypeScript |
-| ADR-010 | Default LLM backend | Ollama (local) · OpenAI · Anthropic |
-| ADR-011 | UI for agents | CLI-first · TUI · Web dashboard |
+| ADR-013 | Monorepo vs split repos for agents | Monorepo · split |

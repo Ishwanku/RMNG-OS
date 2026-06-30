@@ -28,10 +28,11 @@
 
 1. **Kernel first** — Understand and control the foundation before adding AI complexity.
 2. **Out-of-tree discipline** — Keep source clean; builds reproducible; configs versioned.
-3. **Agent-native interfaces** — Every integration exposes structured APIs agents can call.
-4. **Workflow-unified** — One orchestration layer across dev, ops, creative, and personal tasks.
-5. **Local-first, cloud-aware** — Prefer on-device inference where possible; cloud when needed.
-6. **Open and documented** — RMNG-OS tooling is MIT; kernel work respects GPLv2.
+3. **Biological separation** — LLM = Nervous System (reasoning only). OS = Body + Heart + Brains (execution, memory, policy). See ADR-010.
+4. **Agent-native interfaces** — Every integration exposes structured JSON-schema APIs; only the Rust runtime invokes them.
+5. **Workflow-unified** — One orchestration layer across dev, ops, creative, and personal tasks.
+6. **Local-first, cloud-aware** — Ollama default; external APIs pluggable as reasoning backends only.
+7. **Open and documented** — RMNG-OS tooling is MIT; kernel work respects GPLv2.
 
 ## Workflow Domains (planned integrations)
 

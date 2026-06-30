@@ -1,7 +1,7 @@
 # RMNG-OS Requirements Specification
 
-**Version:** 0.1  
-**Status:** Draft — Layer 1 in progress  
+**Version:** 0.2  
+**Status:** Phase 2 complete · Phase 5 decisions locked  
 **Last updated:** 2026-06-30
 
 ## 1. Introduction
@@ -104,9 +104,9 @@ This document defines functional and non-functional requirements for **RMNG-OS**
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-L1-20 | ccache SHALL wrap gcc/g++ with 10 GB cache limit | P0 | ✅ Done |
-| FR-L1-21 | Incremental rebuild SHALL complete in < 5 min (with warm ccache) | P1 | 🔄 Pending benchmark |
-| FR-L1-22 | Slim config build SHALL use significantly less disk than full config | P1 | 🔄 Rebuild in progress |
-| FR-L1-23 | Developer SHALL build individual modules via `make M=...` | P1 | Planned |
+| FR-L1-21 | Incremental rebuild SHALL complete in < 5 min (with warm ccache) | P1 | ✅ 176.39 s (2026-06-30) |
+| FR-L1-22 | Slim config build SHALL use significantly less disk than full config | P1 | ✅ 5.4 GB vs 14 GB full |
+| FR-L1-23 | Developer SHALL build individual modules via `make M=...` | P1 | ✅ `tun.ko` via `M=drivers/net` |
 
 ### 3.4 Kernel customization
 
@@ -143,11 +143,15 @@ This document defines functional and non-functional requirements for **RMNG-OS**
 
 Each integration MUST expose: `name`, `version`, `tools[]` with JSON schema, `auth` requirements.
 
+**Boundary rule (ADR-010):** Integrations are invoked **only** by the local Rust runtime after intent validation. External LLMs never call integrations directly.
+
 | ID | Requirement | Domain | Priority | Status |
 |----|-------------|--------|----------|--------|
 | FR-L3-01 | Dev integration: git, build, file ops | Development | P0 | Planned |
 | FR-L3-02 | Shell command execution with sandbox policy | Development | P0 | Planned |
 | FR-L3-03 | File read/write within allowed paths | All | P0 | Planned |
+| FR-L3-09 | Integrations SHALL accept only runtime-dispatched calls (not LLM-direct) | All | P0 | Locked |
+| FR-L3-10 | Tool inputs/outputs SHALL conform to versioned JSON schemas | All | P0 | Locked |
 | FR-L3-04 | Web fetch / search capability | Research | P1 | Planned |
 | FR-L3-05 | Database query adapter | Data | P2 | Planned |
 | FR-L3-06 | Document generation adapter | Creative | P2 | Planned |
@@ -158,16 +162,27 @@ Each integration MUST expose: `name`, `version`, `tools[]` with JSON schema, `au
 
 ## 6. Functional requirements — Layer 4 (AI agents)
 
+### Biological separation model (mandatory — ADR-010)
+
+| Component | Metaphor | Owner | LLM access |
+|-----------|----------|-------|------------|
+| Reasoning | Nervous System | Pluggable adapter (Ollama default) | Produces JSON intents only |
+| Execution | Body | Local Rust runtime | Never LLM-direct |
+| State + policy | Heart + Brains | Local Rust processes | Never LLM-direct |
+
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
-| FR-L4-01 | Agent runtime SHALL execute tool calls from LLM output | P0 | Planned |
-| FR-L4-02 | Runtime SHALL support local and cloud LLM backends | P0 | Planned |
-| FR-L4-03 | Agents SHALL have session memory (short-term context) | P0 | Planned |
-| FR-L4-04 | Agents SHALL have persistent memory (long-term, user-controlled) | P1 | Planned |
-| FR-L4-05 | Permission model SHALL gate destructive operations | P0 | Planned |
-| FR-L4-06 | Multi-agent router SHALL delegate tasks to specialized agents | P1 | Planned |
-| FR-L4-07 | User SHALL approve high-risk actions before execution | P0 | Planned |
-| FR-L4-08 | Agent activity SHALL be auditable (log of actions) | P1 | Planned |
+| FR-L4-01 | Rust runtime SHALL parse LLM JSON intents and dispatch tools | P0 | Locked (ADR-009) |
+| FR-L4-02 | Reasoning layer SHALL be hybrid: local-first, external API pluggable | P0 | Locked (ADR-010) |
+| FR-L4-03 | Session memory SHALL be owned by local runtime (not LLM provider) | P0 | Locked |
+| FR-L4-04 | Persistent memory SHALL be local, user-controlled store | P1 | Locked |
+| FR-L4-05 | Permission model SHALL gate all tool execution; LLM cannot bypass | P0 | Locked |
+| FR-L4-06 | Multi-agent router SHALL run locally as native Rust processes | P1 | Locked |
+| FR-L4-07 | User SHALL approve high-risk actions before runtime executes | P0 | Locked |
+| FR-L4-08 | All intent → execution chains SHALL be auditable locally | P1 | Locked |
+| FR-L4-09 | LLM SHALL NOT have raw terminal, syscall, or direct integration access | P0 | Locked |
+| FR-L4-10 | Replacing reasoning backend SHALL NOT require changes to execution layer | P1 | Locked |
+| FR-L4-11 | Primary interface SHALL be CLI (`rmng` command) | P0 | Locked (ADR-011) |
 
 ---
 
@@ -198,6 +213,9 @@ Each integration MUST expose: `name`, `version`, `tools[]` with JSON schema, `au
 | NFR-S02 | Agent shell access SHALL use allowlisted commands (future) |
 | NFR-S03 | API keys SHALL live in env or secure store, not docs |
 | NFR-S04 | User confirmation required for: rm -rf, git push --force, sudo |
+| NFR-S05 | LLM layer SHALL NOT receive write access to permission policy or memory stores |
+| NFR-S06 | All LLM outputs entering runtime SHALL pass JSON schema validation |
+| NFR-S07 | Agent runtime SHALL be implemented in Rust (ADR-009) |
 
 ### 7.4 Maintainability
 
@@ -225,13 +243,14 @@ Each integration MUST expose: `name`, `version`, `tools[]` with JSON schema, `au
 - [x] RMNG-OS repo on GitHub
 - [x] Documented setup reproducible from README
 
-### Phase 2 — Active development workflow 🔄
+### Phase 2 — Active development workflow ✅
 
 - [x] Slim config generated and saved
-- [ ] Slim `vmlinux` build completes
-- [ ] ccache incremental rebuild < 5 min
-- [ ] Single module build succeeds
-- [ ] Requirements & architecture docs complete ← **this document**
+- [x] Slim `vmlinux` build completes (440 MB, 5.4 GB build dir)
+- [x] ccache incremental rebuild < 5 min (176.39 s)
+- [x] Single module build succeeds (`tun.ko`, 1.4 MB)
+- [x] Requirements & architecture docs complete
+- [x] Validation report: `docs/benchmarks/phase2-validation-20260630.md`
 
 ### Phase 3 — RMNG identity
 
@@ -263,15 +282,24 @@ Each integration MUST expose: `name`, `version`, `tools[]` with JSON schema, `au
 
 ---
 
-## 10. Open questions
+## 10. Locked architectural decisions (Phase 5)
+
+| ID | Decision | ADR | Status |
+|----|----------|-----|--------|
+| Q-01 | Agent runtime language: **Rust** | ADR-009 | **Locked** |
+| Q-02 | LLM architecture: **Hybrid local-first; nervous-system / body separation** | ADR-010 | **Locked** |
+| Q-03 | Primary interface: **CLI-first** | ADR-011 | **Locked** |
+| Q-04 | Bare-metal boot: **Phase 4** | ADR-012 | **Locked** |
+
+### Q-02 enforcement summary
+
+External LLMs function as the **Nervous System** (reasoning/planning only). The local OS owns the **Body, Heart, and Brains** (execution, memory, permissions, sandboxing, multi-agent orchestration). The `integrations/` layer enforces a strict IPC/schema boundary: LLMs emit JSON intents; the Rust runtime alone parses, authorizes, and executes.
+
+## 11. Open questions
 
 | # | Question | Decision needed by |
 |---|----------|-------------------|
-| Q-01 | Primary agent runtime language: Python vs Rust? | Phase 5 start |
-| Q-02 | Default LLM: local (Ollama) vs cloud (OpenAI/Anthropic)? | Phase 5 start |
-| Q-03 | Desktop shell: CLI-only first vs web UI? | Phase 7 |
-| Q-04 | Target bare-metal boot timeline? | Phase 4+ |
-| Q-05 | Monorepo vs separate repos for agents/integrations? | Phase 5 |
+| Q-05 | Monorepo vs separate repos for agents/integrations? | Phase 5 implementation |
 
 ---
 
@@ -280,3 +308,4 @@ Each integration MUST expose: `name`, `version`, `tools[]` with JSON schema, `au
 | Version | Date | Changes |
 |---------|------|---------|
 | 0.1 | 2026-06-30 | Initial requirements draft |
+| 0.2 | 2026-06-30 | Phase 2 validation complete; Phase 5 decisions locked (ADR-009–012) |

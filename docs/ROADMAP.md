@@ -19,7 +19,7 @@ Development phases for the RMNG-OS kernel lab environment.
 
 ---
 
-## Phase 2 — Active Development Workflow (CURRENT)
+## Phase 2 — Active Development Workflow ✅ COMPLETE
 
 Goal: Turn the environment into a daily-use kernel lab with faster iteration and slimmer builds.
 
@@ -45,7 +45,8 @@ Goal: Turn the environment into a daily-use kernel lab with faster iteration and
 
 | Task | Priority | Notes |
 |------|----------|-------|
-| Incremental rebuild benchmark | High | Measure ccache speedup |
+| Incremental rebuild benchmark | High | ✅ 176.39 s (see benchmarks/) |
+| Single module build | High | ✅ `tun.ko` via `M=drivers/net` |
 | Tune `JOBS` / ccache size | Low | Match 6 CPUs, 12 GB RAM |
 | `make clean` vs full rebuild docs | Low | Disk management |
 
@@ -82,27 +83,32 @@ Goal: Make the kernel build distinctly "RMNG" without forking the entire tree.
 
 ---
 
-## Phase 4 — Advanced Kernel (Optional)
+## Phase 4 — Advanced Kernel + Bare-Metal Boot (ADR-012)
 
 | Task | Notes |
 |------|-------|
 | Boot custom kernel in WSL2 | Requires Microsoft WSL kernel build docs |
+| Bare-metal boot timeline | **Locked: Phase 4** — initramfs, hardware drivers |
 | eBPF / BTF experiments | Tools already built (pahole, dwarves) |
 | GitHub Actions | Lint scripts only — no kernel CI (too heavy) |
 | Cross-compile or module-only CI | Lightweight automation |
 
 ---
 
-## Phase 5 — AI Agent Foundation (after Phase 2–3)
+## Phase 5 — AI Agent Foundation (CURRENT — decisions locked)
 
-Goal: Scaffold the agent runtime without disrupting kernel work. See [VISION.md](VISION.md).
+Goal: Implement Rust runtime with nervous-system / body separation. See [VISION.md](VISION.md), [ADR-009–012](DECISIONS.md).
+
+**Locked:** Rust runtime · Hybrid local-first LLM · CLI-first · JSON intent boundary
 
 | Task | Notes |
 |------|-------|
-| `agents/` runtime scaffold | ✅ placeholder README |
-| `integrations/` adapter layout | ✅ placeholder README |
-| Local LLM / API bridge service | Python or Rust service |
-| Tool registry (shell, git, files) | Structured JSON schemas |
+| `agents/` runtime scaffold | ✅ placeholder → Rust crate next |
+| `integrations/` adapter layout | ✅ placeholder → JSON schema contracts |
+| Ollama nervous-system adapter | Default local reasoning |
+| External API adapter (pluggable) | OpenAI/Anthropic — intents only |
+| `rmng` CLI + `rmngd` daemon | CLI-first (ADR-011) |
+| Permission gate + audit log | Local Rust authority |
 | `gh auth login` in WSL | Git push from Ubuntu |
 
 ## Phase 6 — Workflow Integrations

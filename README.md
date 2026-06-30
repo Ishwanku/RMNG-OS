@@ -10,10 +10,10 @@ A personal **AI Agent-first OS** project — starting with a rock-solid **Linux 
 | Phase | Name | Status |
 |-------|------|--------|
 | **1** | Environment & First Build | ✅ Complete |
-| **2** | Active Development Workflow | 🔄 **Current** |
+| **2** | Active Development Workflow | ✅ Complete |
 | **3** | Customization & RMNG Identity | Planned |
-| **4** | Advanced Kernel (WSL boot, eBPF) | Optional |
-| **5** | AI Agent Foundation | Scaffolded |
+| **4** | Advanced Kernel + Bare-Metal Boot | Planned (ADR-012) |
+| **5** | AI Agent Foundation (Rust, CLI) | 🔄 **Current** |
 | **6** | Workflow Integrations | Planned |
 | **7** | Agent Orchestration | Planned |
 
@@ -113,14 +113,24 @@ make -C ~/dev/kernel/linux O=~/build/kernel olddefconfig
 make -C ~/dev/kernel/linux O=~/build/kernel -j6
 ```
 
-## Phase 2 — Next Steps
+## Phase 2 — Complete ✅
 
-1. ~~**Slim the config**~~ — ✅ `localmodconfig` (8821 → 5498 lines)
-2. **Rebuild with slim config** — `~/scripts/rmng-build.sh` (in progress)
-3. **Benchmark ccache** — incremental rebuild after a one-line change
-4. **Build a single module** — `make M=drivers/char modules`
-5. **Apply a test patch** — custom `LOCALVERSION` or printk change
-6. **Auth git in WSL** — `gh auth login` for painless `git push`
+Validation report: [docs/benchmarks/phase2-validation-20260630.md](docs/benchmarks/phase2-validation-20260630.md)
+
+| Result | Value |
+|--------|-------|
+| Slim `vmlinux` | 440 MB · 5.4 GB build dir |
+| Incremental rebuild | **176.39 s** (ccache warm) |
+| Module build | `tun.ko` (1.4 MB) |
+
+## Phase 5 — Current (decisions locked)
+
+| Decision | Choice |
+|----------|--------|
+| Runtime | **Rust** (ADR-009) |
+| LLM | **Hybrid local-first** — nervous system / body separation (ADR-010) |
+| Interface | **CLI-first** (ADR-011) |
+| Bare-metal | **Phase 4** (ADR-012) |
 
 ## AI-First OS Path
 

@@ -54,7 +54,8 @@ RMNG-OS/
 
 | Document | Version | Last updated |
 |----------|---------|--------------|
-| REQUIREMENTS.md | 0.1 | 2026-06-30 |
-| ARCHITECTURE.md | 0.1 | 2026-06-30 |
+| REQUIREMENTS.md | 0.2 | 2026-06-30 |
+| ARCHITECTURE.md | 0.2 | 2026-06-30 |
+| benchmarks/phase2-validation-20260630.md | 1.0 | 2026-06-30 |
 | VISION.md | 0.1 | 2026-06-27 |
 | ROADMAP.md | 0.2 | 2026-06-30 |

@@ -1,6 +1,29 @@
-# Integrations (Phase A — placeholder)
+# Integrations — The Body (Phase 5+)
 
-Future home for **workflow domain adapters** that AI agents will call.
+**Status:** Specification locked · Implementation not started
+
+## Role in the architecture (ADR-010)
+
+`integrations/` is the **Body** — tool execution layer invoked **only** by the local Rust runtime after permission checks.
+
+**Prohibited:** Direct LLM access to any integration, raw terminal, or unvalidated parameters.
+
+## Contract (mandatory)
+
+Every integration exposes:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Unique identifier |
+| `version` | semver | API version |
+| `tools` | array | Callable actions with JSON Schema parameters |
+| `auth` | object | Credential requirements |
+
+### Dispatch flow
+
+```
+LLM → JSON intent → Rust runtime (validate + authorize) → integrations/ → result → runtime → user
+```
 
 ## Planned structure
 
@@ -11,18 +34,11 @@ integrations/
 ├── creative/     # docs, design, media
 ├── business/     # email, calendar, CRM
 ├── infra/        # cloud, deploy, monitoring
-└── shared/       # auth, config, logging
+└── shared/       # http_get, read_file (allowlisted)
 ```
 
-## Adapter contract (draft)
+## Specs
 
-Each integration should expose:
-
-- `name` — unique identifier
-- `tools[]` — callable actions with JSON schema
-- `auth` — credential requirements
-- `permissions` — what the agent may access
-
-**Status:** Not implemented.
-
-**Specs:** [REQUIREMENTS.md](../docs/REQUIREMENTS.md) (FR-L3-*) · [ARCHITECTURE.md](../docs/ARCHITECTURE.md) (Layer 3) · Complete [Layer 1](../docs/ROADMAP.md) first.
+- [REQUIREMENTS.md](../docs/REQUIREMENTS.md) — FR-L3-*, FR-L3-09, FR-L3-10
+- [ARCHITECTURE.md](../docs/ARCHITECTURE.md) — Layer 3
+- [DECISIONS.md](../docs/DECISIONS.md) — ADR-010
