@@ -1,7 +1,7 @@
 # RMNG-OS Requirements Specification
 
-**Version:** 0.2  
-**Status:** Phase 2 complete · Phase 5 decisions locked  
+**Version:** 0.3  
+**Status:** Phase 3 complete · Phase 5 current  
 **Last updated:** 2026-06-30
 
 ## 1. Introduction
@@ -112,9 +112,9 @@ This document defines functional and non-functional requirements for **RMNG-OS**
 
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
-| FR-L1-30 | Config SHALL support `CONFIG_LOCALVERSION="-rmng"` branding | P1 | ✅ In examples |
-| FR-L1-31 | Developer SHALL apply and track patches under `patches/` | P1 | Planned |
-| FR-L1-32 | Scripted patch-apply + rebuild workflow SHALL exist | P2 | Planned |
+| FR-L1-30 | Config SHALL support `CONFIG_LOCALVERSION="-rmng"` branding | P1 | ✅ Done |
+| FR-L1-31 | Developer SHALL apply and track patches under `patches/` | P1 | ✅ Phase 3 |
+| FR-L1-32 | Scripted patch-apply + rebuild workflow SHALL exist | P2 | ✅ `rebuild-with-patches.sh` |
 | FR-L1-33 | Optional: boot custom kernel in WSL2 | P2 | Planned |
 
 ### 3.5 Developer experience
@@ -252,11 +252,14 @@ Each integration MUST expose: `name`, `version`, `tools[]` with JSON schema, `au
 - [x] Requirements & architecture docs complete
 - [x] Validation report: `docs/benchmarks/phase2-validation-20260630.md`
 
-### Phase 3 — RMNG identity
+### Phase 3 — RMNG identity ✅
 
-- [ ] Custom patch applies cleanly
-- [ ] `CONFIG_LOCALVERSION="-rmng"` in running build
-- [ ] Patches tracked in `patches/`
+- [x] Custom patch applies cleanly (`0001-rmng-boot-banner.patch`)
+- [x] `CONFIG_LOCALVERSION="-rmng"` in build config
+- [x] `kernel.release` = `7.1.0-rmng+`
+- [x] RMNG banner in `vmlinux` strings
+- [x] Patches tracked in `patches/` with apply/rebuild scripts
+- [x] Report: `docs/experiments/phase3-validation-20260630.md`
 
 ### Phase 5 — AI agent foundation
 
@@ -309,3 +312,4 @@ External LLMs function as the **Nervous System** (reasoning/planning only). The 
 |---------|------|---------|
 | 0.1 | 2026-06-30 | Initial requirements draft |
 | 0.2 | 2026-06-30 | Phase 2 validation complete; Phase 5 decisions locked (ADR-009–012) |
+| 0.3 | 2026-06-30 | Phase 3 RMNG kernel identity complete |

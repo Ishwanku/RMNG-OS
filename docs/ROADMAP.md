@@ -70,16 +70,19 @@ Goal: Turn the environment into a daily-use kernel lab with faster iteration and
 
 ---
 
-## Phase 3 — Customization & RMNG Identity
+## Phase 3 — Customization & RMNG Identity ✅ COMPLETE
 
 Goal: Make the kernel build distinctly "RMNG" without forking the entire tree.
 
-| Task | Notes |
-|------|-------|
-| Custom `CONFIG_LOCALVERSION="-rmng"` | Already in example config |
-| Custom boot logo / printk banner patch | Small out-of-tree patch series |
-| Track patches under `patches/` in RMNG-OS repo | Quilt or git format-patch |
-| Scripted patch apply + rebuild | `scripts/rebuild-with-patches.sh` |
+| Task | Status | Notes |
+|------|--------|-------|
+| Custom `CONFIG_LOCALVERSION="-rmng"` | ✅ | Set in `$KBUILD/.config` |
+| RMNG boot banner patch | ✅ | `patches/0001-rmng-boot-banner.patch` |
+| Track patches under `patches/` | ✅ | `series` + README |
+| Scripted patch apply + rebuild | ✅ | `apply-patches.sh`, `rebuild-with-patches.sh` |
+| Validation report | ✅ | `docs/experiments/phase3-validation-20260630.md` |
+
+**Outcome:** Patched kernel builds with RMNG identity banner in `vmlinux`; rebuild ~252 s with warm ccache.
 
 ---
 
@@ -95,7 +98,7 @@ Goal: Make the kernel build distinctly "RMNG" without forking the entire tree.
 
 ---
 
-## Phase 5 — AI Agent Foundation (CURRENT — decisions locked)
+## Phase 5 — AI Agent Foundation (CURRENT — decisions locked, implementation next)
 
 Goal: Implement Rust runtime with nervous-system / body separation. See [VISION.md](VISION.md), [ADR-009–012](DECISIONS.md).
 
@@ -154,5 +157,5 @@ code ~/dev/projects/RMNG-OS
 |-------|-----------|
 | **1** | `vmlinux` exists, repo on GitHub | ✅ |
 | **2** | Slim config builds, ccache rebuild < 5 min, daily scripts work |
-| **3** | Custom patch applies cleanly and rebuilds |
+| **3** | Custom patch applies cleanly and rebuilds | ✅ |
 | **4** | Optional advanced goal achieved |

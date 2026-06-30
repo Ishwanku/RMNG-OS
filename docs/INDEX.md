@@ -13,6 +13,7 @@ Central index for all project documentation. Start here when onboarding or shari
 | [ROADMAP.md](ROADMAP.md) | Planning | Phased delivery timeline |
 | [setup.md](setup.md) | Operators | WSL environment install guide |
 | [daily-workflow.md](daily-workflow.md) | Developers | Day-to-day commands |
+| [experiments/phase3-validation-20260630.md](experiments/phase3-validation-20260630.md) | Kernel dev | Phase 3 RMNG identity validation |
 | [DECISIONS.md](DECISIONS.md) | Maintainers | Architecture decision records |
 
 ## By role
@@ -45,6 +46,7 @@ Central index for all project documentation. Start here when onboarding or shari
 RMNG-OS/
 ├── docs/           ← you are here
 ├── scripts/        ← automation
+├── patches/        ← kernel patch series
 ├── config/         ← kernel & WSL templates
 ├── agents/         ← future agent runtime
 └── integrations/   ← future workflow adapters
@@ -54,8 +56,9 @@ RMNG-OS/
 
 | Document | Version | Last updated |
 |----------|---------|--------------|
-| REQUIREMENTS.md | 0.2 | 2026-06-30 |
+| REQUIREMENTS.md | 0.3 | 2026-06-30 |
 | ARCHITECTURE.md | 0.2 | 2026-06-30 |
 | benchmarks/phase2-validation-20260630.md | 1.0 | 2026-06-30 |
 | VISION.md | 0.1 | 2026-06-27 |
-| ROADMAP.md | 0.2 | 2026-06-30 |
+| ROADMAP.md | 0.3 | 2026-06-30 |
+| experiments/phase3-validation-20260630.md | 1.0 | 2026-06-30 |

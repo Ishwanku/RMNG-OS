@@ -35,6 +35,32 @@ make -C "$KSRC" O="$KBUILD" M=drivers/char -j6
 make -C "$KSRC" O="$KBUILD" clean
 ```
 
+
+## RMNG identity (Phase 3)
+
+Apply RMNG patches and rebuild with branded LOCALVERSION:
+
+```bash
+cd ~/dev/projects/RMNG-OS
+./scripts/rebuild-with-patches.sh
+```
+
+Apply patches only (no rebuild):
+
+```bash
+./scripts/apply-patches.sh
+```
+
+Verify RMNG banner in built kernel:
+
+```bash
+source ~/scripts/kernel-env.sh
+strings "$KBUILD/vmlinux" | grep RMNG-OS
+grep CONFIG_LOCALVERSION "$KBUILD/.config"
+```
+
+See `patches/README.md` for adding new patches to the series.
+
 ## Configuration
 
 ```bash

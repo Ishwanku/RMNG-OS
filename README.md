@@ -11,7 +11,7 @@ A personal **AI Agent-first OS** project — starting with a rock-solid **Linux 
 |-------|------|--------|
 | **1** | Environment & First Build | ✅ Complete |
 | **2** | Active Development Workflow | ✅ Complete |
-| **3** | Customization & RMNG Identity | Planned |
+| **3** | Customization & RMNG Identity | ✅ Complete |
 | **4** | Advanced Kernel + Bare-Metal Boot | Planned (ADR-012) |
 | **5** | AI Agent Foundation (Rust, CLI) | 🔄 **Current** |
 | **6** | Workflow Integrations | Planned |
@@ -54,11 +54,14 @@ RMNG-OS/
 │   ├── build.sh                    # Standardized make wrapper
 │   ├── status.sh                   # Environment health check
 │   ├── workspace-setup.sh          # One-time workspace wiring
-│   └── make-config-example.sh      # Regenerate config from local build
+│   ├── make-config-example.sh      # Regenerate config from local build
+│   ├── apply-patches.sh            # Apply RMNG patch series
+│   └── rebuild-with-patches.sh     # Patch + LOCALVERSION + rebuild
 ├── config/
 │   ├── wsl.conf.example
 │   ├── wslconfig.example
 │   └── wsl-kernel.config.example   # Sanitized WSL2 baseline .config
+├── patches/                        # Kernel patch series (RMNG identity)
 ├── agents/                         # Future agent runtime (placeholder)
 ├── integrations/                   # Future workflow adapters (placeholder)
 └── docs/
@@ -69,7 +72,9 @@ RMNG-OS/
     ├── ROADMAP.md                  # Phase plan
     ├── DECISIONS.md                # Architecture decisions
     ├── setup.md                    # Full install guide
-    └── daily-workflow.md           # Common commands
+    ├── daily-workflow.md           # Common commands
+    ├── experiments/                # Phase validation logs
+    └── benchmarks/                   # Performance benchmarks
 ```
 
 ## Quick Start (Existing Machine)
@@ -122,6 +127,22 @@ Validation report: [docs/benchmarks/phase2-validation-20260630.md](docs/benchmar
 | Slim `vmlinux` | 440 MB · 5.4 GB build dir |
 | Incremental rebuild | **176.39 s** (ccache warm) |
 | Module build | `tun.ko` (1.4 MB) |
+
+
+## Phase 3 — Complete ✅
+
+Validation: [docs/experiments/phase3-validation-20260630.md](docs/experiments/phase3-validation-20260630.md)
+
+| Result | Value |
+|--------|-------|
+| RMNG boot banner | Embedded in `vmlinux` |
+| `CONFIG_LOCALVERSION` | `-rmng` |
+| Patch series | `patches/0001-rmng-boot-banner.patch` |
+| Rebuild elapsed | **252.20 s** (ccache warm) |
+
+```bash
+./scripts/rebuild-with-patches.sh   # apply patches + rebuild
+```
 
 ## Phase 5 — Current (decisions locked)
 

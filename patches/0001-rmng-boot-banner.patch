@@ -1,0 +1,12 @@
+diff --git a/init/main.c b/init/main.c
+index e363232b428b..48f4bdeb9d16 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -991,6 +991,7 @@ void start_kernel(void)
+ 	boot_cpu_init();
+ 	page_address_init();
+ 	pr_notice("%s", linux_banner);
++	pr_info("RMNG-OS: kernel identity active - foundation layer ready\n");
+ 	setup_arch(&command_line);
+ 	mm_core_init_early();
+ 	/* Static keys and static calls are needed by LSMs */
