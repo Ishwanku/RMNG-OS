@@ -110,3 +110,4 @@ git push origin main
 | Build too slow | Ensure ccache active: `which gcc` → `/usr/lib/ccache/gcc` |
 | Wrong config | `cp config/wsl-kernel.config.example $KBUILD/.config && make olddefconfig` |
 | `git push` hangs | Run `gh auth login` in WSL |
+| Concurrent rebuild / `ld: bad reloc` | Only one build at a time; `rebuild-with-patches.sh` uses flock. If stuck: `pgrep make`, wait, or `make O=$KBUILD clean` |
