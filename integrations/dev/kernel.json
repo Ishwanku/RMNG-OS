@@ -1,0 +1,29 @@
+{
+  "name": "dev.kernel",
+  "version": "0.1.0",
+  "description": "Kernel lab tools — WSL2 build, status, patches",
+  "auth": { "type": "none" },
+  "tools": [
+    {
+      "name": "kernel.status",
+      "description": "Report kernel source, build, and environment health",
+      "parameters": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "kernel.build",
+      "description": "Run standardized kernel build (scripts/build.sh)",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "target": { "type": "string", "enum": ["all", "modules", "bzImage"], "default": "all" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kernel.apply_patches",
+      "description": "Apply RMNG patches and rebuild kernel",
+      "parameters": { "type": "object", "properties": {}, "additionalProperties": false }
+    }
+  ]
+}

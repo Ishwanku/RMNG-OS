@@ -8,6 +8,8 @@ pub enum RmngError {
     PermissionDenied(String),
     #[error("tool execution failed: {0}")]
     ToolFailed(String),
+    #[error("ipc error: {0}")]
+    Ipc(String),
     #[error("serialization error: {0}")]
     Serde(#[from] serde_json::Error),
 }

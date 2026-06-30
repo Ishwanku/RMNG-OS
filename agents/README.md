@@ -2,25 +2,6 @@
 
 **Status:** In progress
 
-## Architecture (ADR-009, ADR-010)
-
-| Layer | Component | Role |
-|-------|-----------|------|
-| Nervous system | `rmng-nervous` | Ollama → JSON intents only |
-| Heart + Brains | `rmng-core`, `rmngd` | Permission gate, tool dispatch, audit |
-| Interface | `rmng-cli` | `rmng` CLI (ADR-011) |
-
-## Workspace
-
-```
-agents/
-├── rmng-core/       # Intent, permissions, tools, audit
-├── rmng-nervous/    # Ollama adapter
-├── rmng-cli/        # rmng binary
-├── rmngd/           # Unix socket daemon
-└── schemas/         # JSON intent schemas
-```
-
 ## Commands
 
 ```bash
@@ -28,13 +9,24 @@ cd ~/dev/projects/RMNG-OS/agents
 cargo build
 
 rmng status
-rmng tools
-rmng run -f schemas/kernel-status.intent.json
-rmng ask "check kernel environment" --dry-run   # needs Ollama
+rmng run -f schemas/kernel-status.intent.json    # local runtime
+rmngd &                                            # start daemon
+rmng send -f schemas/kernel-status.intent.json     # via daemon + audit
+rmng ask "check kernel status" --dry-run           # Ollama → intent
 ```
+
+Install to PATH: `~/dev/projects/RMNG-OS/scripts/install-rmng.sh`
+
+## Crates
+
+| Crate | Role |
+|-------|------|
+| `rmng-core` | Intent, permissions, tools, audit, IPC |
+| `rmng-nervous` | Ollama adapter |
+| `rmng-cli` | `rmng` binary |
+| `rmngd` | Unix socket daemon (`~/.rmng/rmngd.sock`) |
 
 ## Specs
 
 - [REQUIREMENTS.md](../docs/REQUIREMENTS.md)
-- [ARCHITECTURE.md](../docs/ARCHITECTURE.md)
-- [DECISIONS.md](../docs/DECISIONS.md)
+- [integrations/dev/](../integrations/dev/) — tool manifests

@@ -1,44 +1,40 @@
 # Integrations — The Body (Phase 5+)
 
-**Status:** Specification locked · Implementation not started
+**Status:** Dev/kernel manifest live · runtime in `rmng-core`
 
-## Role in the architecture (ADR-010)
+## Role (ADR-010)
 
-`integrations/` is the **Body** — tool execution layer invoked **only** by the local Rust runtime after permission checks.
+Tool execution layer invoked **only** by the local Rust runtime after permission checks. LLMs emit JSON intents; they never call integrations directly.
 
-**Prohibited:** Direct LLM access to any integration, raw terminal, or unvalidated parameters.
-
-## Contract (mandatory)
-
-Every integration exposes:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | Unique identifier |
-| `version` | semver | API version |
-| `tools` | array | Callable actions with JSON Schema parameters |
-| `auth` | object | Credential requirements |
-
-### Dispatch flow
+## Dispatch flow
 
 ```
-LLM → JSON intent → Rust runtime (validate + authorize) → integrations/ → result → runtime → user
+LLM → JSON intent → rmng-core (validate + authorize) → tools/ → result → audit log
 ```
 
-## Planned structure
+## Layout
 
 ```
 integrations/
-├── dev/          # git, build, kernel, containers
-├── data/         # databases, files, notebooks
-├── creative/     # docs, design, media
-├── business/     # email, calendar, CRM
-├── infra/        # cloud, deploy, monitoring
-└── shared/       # http_get, read_file (allowlisted)
+├── dev/
+│   ├── kernel.json    # kernel lab tools (live)
+│   └── README.md
+├── data/              # planned
+├── creative/          # planned
+└── shared/            # planned
+```
+
+## Live tools
+
+See [dev/kernel.json](dev/kernel.json). Invoke via:
+
+```bash
+rmng run -f agents/schemas/kernel-status.intent.json
+rmng send -f agents/schemas/kernel-status.intent.json   # via rmngd
 ```
 
 ## Specs
 
-- [REQUIREMENTS.md](../docs/REQUIREMENTS.md) — FR-L3-*, FR-L3-09, FR-L3-10
-- [ARCHITECTURE.md](../docs/ARCHITECTURE.md) — Layer 3
+- [REQUIREMENTS.md](../docs/REQUIREMENTS.md)
+- [ARCHITECTURE.md](../docs/ARCHITECTURE.md)
 - [DECISIONS.md](../docs/DECISIONS.md) — ADR-010

@@ -1,14 +1,40 @@
-use rmng_core::Runtime;
+use rmng_core::{Intent, Runtime};
 use std::path::PathBuf;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tracing::info;
 
 fn socket_path() -> PathBuf {
-    if let Ok(home) = std::env::var("HOME") {
-        return PathBuf::from(home).join(".rmng/rmngd.sock");
+    rmng_core::socket_path()
+}
+
+async fn handle_connection(stream: tokio::net::UnixStream, runtime: Runtime) {
+    let (reader, mut writer) = stream.into_split();
+    let mut lines = BufReader::new(reader).lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let response = match Intent::parse(&line) {
+            Ok(intent) => match runtime.handle_response(&intent).await {
+                Ok(resp) => serde_json::to_string(&resp).unwrap_or_else(|e| {
+                    serde_json::to_string(&rmng_core::HandleResponse::failure(e.to_string()))
+                        .unwrap()
+                }),
+                Err(e) => serde_json::to_string(&rmng_core::HandleResponse::failure(e.to_string()))
+                    .unwrap(),
+            },
+            Err(e) => serde_json::to_string(&rmng_core::HandleResponse::failure(e.to_string()))
+                .unwrap(),
+        };
+        if writer
+            .write_all(format!("{response}\n").as_bytes())
+            .await
+            .is_err()
+        {
+            break;
+        }
     }
-    PathBuf::from("/tmp/rmngd.sock")
 }
 
 #[tokio::main]
@@ -33,19 +59,6 @@ async fn main() {
     loop {
         let (stream, _) = listener.accept().await.expect("accept");
         let runtime = runtime.clone();
-        tokio::spawn(async move {
-            let mut lines = BufReader::new(stream).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                if line.trim().is_empty() {
-                    continue;
-                }
-                match rmng_core::Intent::parse(&line) {
-                    Ok(intent) => {
-                        let _ = runtime.handle(&intent).await;
-                    }
-                    Err(e) => tracing::warn!(error = %e, "invalid intent line"),
-                }
-            }
-        });
+        tokio::spawn(handle_connection(stream, runtime));
     }
 }

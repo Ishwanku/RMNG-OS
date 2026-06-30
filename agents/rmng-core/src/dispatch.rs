@@ -1,6 +1,7 @@
 use crate::audit::{AuditEntry, AuditLog};
 use crate::intent::{Intent, IntentKind};
 use crate::permission::{PermissionGate, PermissionVerdict};
+use crate::response::HandleResponse;
 use crate::tool::ToolResult;
 use crate::tools;
 use crate::RmngError;
@@ -28,10 +29,14 @@ impl Runtime {
     }
 
     pub async fn handle(&self, intent: &Intent) -> Result<Option<ToolResult>, RmngError> {
+        Ok(self.handle_response(intent).await?.tool_result)
+    }
+
+    pub async fn handle_response(&self, intent: &Intent) -> Result<HandleResponse, RmngError> {
         match self.gate.evaluate(intent) {
             PermissionVerdict::Deny(reason) => {
                 self.log(intent, "deny", &reason);
-                return Err(RmngError::PermissionDenied(reason));
+                return Ok(HandleResponse::failure(reason));
             }
             PermissionVerdict::Allow => {}
         }
@@ -39,7 +44,7 @@ impl Runtime {
         match intent.kind {
             IntentKind::Plan | IntentKind::Clarify | IntentKind::Complete => {
                 self.log(intent, &format!("{:?}", intent.kind), "ok");
-                Ok(None)
+                Ok(HandleResponse::success(intent.kind.clone(), None))
             }
             IntentKind::ToolRequest => {
                 let tool = intent
@@ -50,7 +55,7 @@ impl Runtime {
                 let result = tools::dispatch(&tool.name, &tool.args).await?;
                 let outcome = if result.success { "ok" } else { "fail" };
                 self.log(intent, &tool.name, outcome);
-                Ok(Some(result))
+                Ok(HandleResponse::success(intent.kind.clone(), Some(result)))
             }
         }
     }
