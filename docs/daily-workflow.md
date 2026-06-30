@@ -120,6 +120,60 @@ rmng ask "check kernel build status" --dry-run
 rmng ask "check kernel build status"
 ```
 
+## Dev MCP Servers (IDE Assistance)
+
+MCP servers configured via `scripts/setup-dev-mcp.sh` are for **developer IDE assistance only** (Cursor, VS Code, etc.). They help you read files, inspect git history, fetch docs, and query GitHub during a coding session.
+
+They are **not** part of the production execution path. RMNG-OS enforces nervous-system / body separation (ADR-010): the LLM and IDE reason; `rmngd` executes.
+
+| Layer | Role | Examples |
+|-------|------|----------|
+| **Nervous** (IDE + LLM) | Read, plan, shape intents | MCP filesystem, git, fetch, github, memory |
+| **Body** (`rmngd`) | Execute approved tools | `kernel.*`, `git.status` via `PermissionGate` |
+
+**Production tool execution** always goes through:
+
+```bash
+rmng send -f schemas/kernel-status.intent.json
+rmng ask "check kernel status"          # emits intent → rmngd
+systemctl --user status rmngd           # daemon must be running
+```
+
+Do not route automated or unattended work through IDE MCP servers.
+
+### Setup (one-time per machine)
+
+```bash
+cd ~/dev/projects/RMNG-OS
+./scripts/setup-dev-mcp.sh
+```
+
+Writes `~/.config/rmng/mcp-dev.json` from `config/mcp-servers.wsl.example.json` with your `$USER` paths.
+
+**Prerequisites:** Node.js (`npx`), `uv` (`uvx` for git MCP), `gh auth login` for GitHub MCP token.
+
+Optional: merge entries into `~/.cursor/mcp.json` for Cursor. **Never commit** MCP config or tokens to the repo.
+
+### Allowed paths (filesystem MCP)
+
+| Path | Purpose |
+|------|---------|
+| `~/dev/projects/RMNG-OS` | Tooling, docs, patches, skills, agents |
+| `~/dev/kernel/linux` | Kernel source (read; GPLv2, separate clone) |
+| `~/build/kernel` | Out-of-tree build dir (read; do not commit artifacts) |
+
+### Configured servers
+
+| Server | Dev use | Production equivalent |
+|--------|---------|----------------------|
+| filesystem | Browse repo, docs, configs | Native tools + `kernel.status` |
+| git | Rich git log/diff in IDE | `git.status` via `rmng send` |
+| fetch | Kernel/WSL documentation lookup | Manual reference |
+| github | Issues, PRs, Actions context | Planned `github.*` native tools |
+| memory | Cross-session IDE notes | `~/.rmng/` runtime (Phase 7+) |
+
+The Rust MCP bridge (`rmng-mcp`) is **Phase 6b** — not part of this setup.
+
 ## Troubleshooting
 
 | Problem | Solution |
