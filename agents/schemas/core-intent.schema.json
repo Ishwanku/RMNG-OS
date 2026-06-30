@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rmng-os.local/schemas/core-intent/v2",
+  "title": "RMNG Core Intent",
+  "description": "Versioned poly-intent envelope for the nervous-system → body IPC boundary. Separates native tool execution from MCP proxy requests and plan-only reasoning.",
+  "oneOf": [
+    { "$ref": "#/definitions/toolExecute" },
+    { "$ref": "#/definitions/mcpProxy" },
+    { "$ref": "#/definitions/planOnly" }
+  ],
+  "definitions": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trace_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Correlation id for audit and distributed tracing"
+        },
+        "skill_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Nervous-system skill that shaped this intent (e.g. kernel-build)"
+        }
+      }
+    },
+    "strictFlatObject": {
+      "type": "object",
+      "description": "Flat key-value bag for tool/MCP arguments. Nested objects are rejected to limit LLM structural hallucination; per-tool schemas may tighten further.",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z][a-z0-9_.-]*$": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" },
+            { "type": "boolean" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "toolExecute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "target", "parameters"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "tool.execute"
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]+$",
+          "description": "Namespaced native tool id (e.g. kernel.status, git.status)"
+        },
+        "parameters": {
+          "$ref": "#/definitions/strictFlatObject"
+        },
+        "metadata": {
+          "$ref": "#/definitions/metadata"
+        }
+      }
+    },
+    "mcpProxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "mcp_server", "mcp_tool", "mcp_args"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "mcp.proxy"
+        },
+        "mcp_server": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_-]+$",
+          "description": "Allowlisted MCP server id (e.g. github, git)"
+        },
+        "mcp_tool": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]+$",
+          "description": "Tool name exposed by the MCP server"
+        },
+        "mcp_args": {
+          "$ref": "#/definitions/strictFlatObject"
+        },
+        "metadata": {
+          "$ref": "#/definitions/metadata"
+        }
+      }
+    },
+    "planOnly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "reasoning"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "plan.only"
+        },
+        "reasoning": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Abstract reasoning or transition message; no execution fields"
+        },
+        "metadata": {
+          "$ref": "#/definitions/metadata"
+        }
+      }
+    }
+  }
+}

@@ -15,7 +15,9 @@ pub use audit::{AuditEntry, AuditLog};
 pub use config::{LlmConfig, LlmProvider, RmngConfig};
 pub use dispatch::Runtime;
 pub use error::RmngError;
-pub use intent::{Intent, IntentKind, ToolRequest};
+pub use intent::{
+    CoreIntent, Intent, IntentKind, Metadata, ToolRequest, CORE_INTENT_SCHEMA_VERSION,
+};
 pub use ipc::{daemon_running, send_intent_json, socket_path};
 pub use permission::{PermissionGate, PermissionVerdict};
 pub use response::HandleResponse;

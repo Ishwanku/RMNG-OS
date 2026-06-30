@@ -288,8 +288,26 @@ Top GitHub OSS ecosystems (MCP, agent skills, orchestration frameworks) offer th
 
 ---
 
+## ADR-015: Intent schema decoupling — poly-intent core envelope
+
+**Date:** 2026-06-30  
+**Status:** **Accepted**
+
+### Context
+Phase 6b requires separating native tool execution from MCP proxy requests at the data layer. v1 intents conflate tool requests under a single `kind` without an MCP path.
+
+### Decision
+Adopt v2 **poly-intent** envelope (`agents/schemas/core-intent.schema.json`) with internally tagged `action` field: `tool.execute`, `mcp.proxy`, `plan.only`. Rust models as `CoreIntent` enum with `#[serde(tag = "action", deny_unknown_fields)]`.
+
+### Consequences
+- ✅ Full record: [docs/decisions/ADR-015-intent-schema-decoupling.md](decisions/ADR-015-intent-schema-decoupling.md)
+- ✅ v1 `Intent` retained for backward compatibility until dispatch migration
+- ⚠️ `PermissionGate` extension for `mcp.proxy` in Phase 6b
+
+---
+
 ## Pending decisions
 
 | ADR | Topic | Options |
 |-----|-------|---------|
-| ADR-015 | Monorepo vs split repos for Rust runtime | Monorepo · split |
+| ADR-016 | Monorepo vs split repos for Rust runtime | Monorepo · split |
