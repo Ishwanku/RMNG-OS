@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rmng-os.local/schemas/intent/v1",
+  "title": "RMNG Intent",
+  "type": "object",
+  "required": ["schema_version", "intent_id", "kind", "summary"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1" },
+    "intent_id": { "type": "string", "format": "uuid" },
+    "kind": {
+      "type": "string",
+      "enum": ["plan", "tool_request", "clarify", "complete"]
+    },
+    "summary": { "type": "string" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "args"],
+      "properties": {
+        "name": { "type": "string" },
+        "args": { "type": "object" }
+      }
+    }
+  }
+}

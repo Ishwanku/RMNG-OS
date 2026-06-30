@@ -1,34 +1,39 @@
-# Agents — Local Rust Runtime (Phase 5)
+# Agents — Rust Runtime (Phase 5)
 
-**Status:** Specification locked · Implementation not started
+**Status:** Scaffold · Implementation in progress
 
-## Role in the architecture (ADR-009, ADR-010)
+## Architecture (ADR-009, ADR-010)
 
-The `agents/` tree hosts the **Heart + Brains** of RMNG-OS — entirely local, never delegated to external LLMs.
+| Layer | Component | Role |
+|-------|-----------|------|
+| Nervous system | `nervous/` | LLM adapters — emit JSON intents only |
+| Heart + Brains | `rmng-core/`, `rmngd/` | Local runtime — execute tools, permissions, memory |
+| Interface | `rmng-cli/` | CLI-first entry point (ADR-011) |
 
-| Component | Responsibility |
-|-----------|----------------|
-| `rmngd` daemon | Long-running orchestrator |
-| Intent parser | Validates JSON schemas from nervous-system layer |
-| Permission gate | Authorizes or denies each tool dispatch |
-| Memory store | Session + persistent state (local ownership) |
-| Multi-agent router | Delegates to specialist agents (local processes) |
+External LLMs never receive raw terminal or system access.
 
-**External LLMs** connect only as the **Nervous System** — they emit intents; they never execute tools or hold authoritative state.
-
-## Planned layout
+## Workspace layout
 
 ```
 agents/
-├── rmng-core/        # Runtime library (Rust)
-├── rmngd/            # System daemon
-├── rmng-cli/         # CLI binary (ADR-011)
-├── schemas/          # JSON intent schemas (versioned)
-└── nervous/          # LLM adapters (Ollama, OpenAI, Anthropic)
+├── Cargo.toml          # Rust workspace
+├── rmng-core/          # Runtime library
+├── rmngd/              # System daemon
+├── rmng-cli/           # CLI binary (`rmng`)
+├── schemas/            # JSON intent schemas (versioned)
+└── nervous/            # Ollama + external API adapters
+```
+
+## Build
+
+```bash
+cd ~/dev/projects/RMNG-OS/agents
+cargo build
+cargo test
 ```
 
 ## Specs
 
-- [REQUIREMENTS.md](../docs/REQUIREMENTS.md) — FR-L4-*
-- [ARCHITECTURE.md](../docs/ARCHITECTURE.md) — Layer 4, biological separation
-- [DECISIONS.md](../docs/DECISIONS.md) — ADR-009, ADR-010, ADR-011
+- [REQUIREMENTS.md](../docs/REQUIREMENTS.md)
+- [ARCHITECTURE.md](../docs/ARCHITECTURE.md)
+- [DECISIONS.md](../docs/DECISIONS.md) — ADR-009–012

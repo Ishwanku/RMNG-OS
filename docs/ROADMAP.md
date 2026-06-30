@@ -106,12 +106,12 @@ Goal: Implement Rust runtime with nervous-system / body separation. See [VISION.
 
 | Task | Notes |
 |------|-------|
-| `agents/` runtime scaffold | ✅ placeholder → Rust crate next |
-| `integrations/` adapter layout | ✅ placeholder → JSON schema contracts |
-| Ollama nervous-system adapter | Default local reasoning |
+| `agents/` runtime scaffold | 🔄 Rust workspace (`rmng-core`, `rmng-cli`, `rmngd`) |
+| `integrations/` adapter layout | 🔄 `schemas/` intent v1 |
+| Ollama nervous-system adapter | Planned (`agents/nervous/`) |
 | External API adapter (pluggable) | OpenAI/Anthropic — intents only |
-| `rmng` CLI + `rmngd` daemon | CLI-first (ADR-011) |
-| Permission gate + audit log | Local Rust authority |
+| `rmng` CLI + `rmngd` daemon | 🔄 scaffold builds |
+| Permission gate + audit log | 🔄 `PermissionGate` in rmng-core |
 | `gh auth login` in WSL | Git push from Ubuntu |
 
 ## Phase 6 — Workflow Integrations

@@ -62,7 +62,7 @@ RMNG-OS/
 │   ├── wslconfig.example
 │   └── wsl-kernel.config.example   # Sanitized WSL2 baseline .config
 ├── patches/                        # Kernel patch series (RMNG identity)
-├── agents/                         # Future agent runtime (placeholder)
+├── agents/                         # Rust runtime workspace (Phase 5)
 ├── integrations/                   # Future workflow adapters (placeholder)
 └── docs/
     ├── INDEX.md                    # Documentation hub
@@ -144,7 +144,16 @@ Validation: [docs/experiments/phase3-validation-20260630.md](docs/experiments/ph
 ./scripts/rebuild-with-patches.sh   # apply patches + rebuild
 ```
 
-## Phase 5 — Current (decisions locked)
+
+## Phase 5 — In Progress 🔄
+
+Rust agent runtime scaffold in `agents/`:
+
+| Crate | Purpose |
+|-------|---------|
+| `rmng-core` | Intent parsing, permission gate |
+| `rmng-cli` | `rmng` CLI (ADR-011) |
+| `rmngd` | System daemon stub |
 
 | Decision | Choice |
 |----------|--------|
@@ -152,6 +161,10 @@ Validation: [docs/experiments/phase3-validation-20260630.md](docs/experiments/ph
 | LLM | **Hybrid local-first** — nervous system / body separation (ADR-010) |
 | Interface | **CLI-first** (ADR-011) |
 | Bare-metal | **Phase 4** (ADR-012) |
+
+```bash
+cd ~/dev/projects/RMNG-OS/agents && cargo build && cargo test
+```
 
 ## AI-First OS Path
 

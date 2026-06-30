@@ -1,7 +1,7 @@
 # RMNG-OS Requirements Specification
 
 **Version:** 0.3  
-**Status:** Phase 3 complete · Phase 5 current  
+**Status:** Phase 3 complete · Phase 5 in progress  
 **Last updated:** 2026-06-30
 
 ## 1. Introduction

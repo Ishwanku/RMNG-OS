@@ -39,3 +39,11 @@ dev/kernel/linux/
 .env
 *.pem
 id_rsa*
+
+# --- Local dev environment (never commit) ---
+.claude/
+.claude-flow/
+.mcp.json
+agents/ruflo/
+.verification-history.jsonl
+agents/target
