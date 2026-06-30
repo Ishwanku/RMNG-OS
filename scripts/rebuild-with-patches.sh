@@ -4,8 +4,16 @@ set -euo pipefail
 
 SCRIPT="$(readlink -f "$0")"
 ROOT="$(cd "$(dirname "$SCRIPT")/.." && pwd)"
+LOCK_FILE="${KBUILD_LOCK:-/tmp/rmng-kernel-build.lock}"
 # shellcheck source=/dev/null
 source "${HOME}/scripts/kernel-env.sh" 2>/dev/null || source "$ROOT/scripts/kernel-env.sh"
+
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "ERROR: Another kernel build is running (lock: $LOCK_FILE)" >&2
+  echo "Wait for it to finish, or remove the lock only if no make process is active." >&2
+  exit 1
+fi
 
 JOBS="${JOBS:-6}"
 REPORT="$ROOT/docs/experiments/phase3-build-$(date +%Y%m%d).md"
@@ -24,7 +32,6 @@ mkdir -p "$ROOT/docs/experiments"
   mkdir -p "$KBUILD"
   if [ ! -f "$KBUILD/.config" ]; then
     cp "$ROOT/config/wsl-kernel.config.slim.example" "$KBUILD/.config"
-    # strip header comments from example
     sed -i '/^# RMNG-OS/d;/^# Baseline/d;/^# Use:/d;/^# Kernel source/d;/^$/d' "$KBUILD/.config" 2>/dev/null || true
   fi
   sed -i 's/CONFIG_LOCALVERSION="-microsoft-standard-WSL2"/CONFIG_LOCALVERSION="-rmng"/' "$KBUILD/.config"
@@ -34,7 +41,6 @@ mkdir -p "$ROOT/docs/experiments"
   fi
   make -C "$KSRC" O="$KBUILD" olddefconfig
   echo "LOCALVERSION: $(grep CONFIG_LOCALVERSION= "$KBUILD/.config" | grep -v AUTO)"
-  # Ensure kernel.release is generated before linking vmlinux
   make -C "$KSRC" O="$KBUILD" kernelrelease 2>/dev/null || \
     make -C "$KSRC" O="$KBUILD" include/config/kernel.release 2>/dev/null || true
   echo "kernel.release: $(cat "$KBUILD/include/config/kernel.release" 2>/dev/null || echo pending)"
