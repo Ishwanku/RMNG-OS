@@ -1,39 +1,40 @@
 # Agents — Rust Runtime (Phase 5)
 
-**Status:** Scaffold · Implementation in progress
+**Status:** In progress
 
 ## Architecture (ADR-009, ADR-010)
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| Nervous system | `nervous/` | LLM adapters — emit JSON intents only |
-| Heart + Brains | `rmng-core/`, `rmngd/` | Local runtime — execute tools, permissions, memory |
-| Interface | `rmng-cli/` | CLI-first entry point (ADR-011) |
+| Nervous system | `rmng-nervous` | Ollama → JSON intents only |
+| Heart + Brains | `rmng-core`, `rmngd` | Permission gate, tool dispatch, audit |
+| Interface | `rmng-cli` | `rmng` CLI (ADR-011) |
 
-External LLMs never receive raw terminal or system access.
-
-## Workspace layout
+## Workspace
 
 ```
 agents/
-├── Cargo.toml          # Rust workspace
-├── rmng-core/          # Runtime library
-├── rmngd/              # System daemon
-├── rmng-cli/           # CLI binary (`rmng`)
-├── schemas/            # JSON intent schemas (versioned)
-└── nervous/            # Ollama + external API adapters
+├── rmng-core/       # Intent, permissions, tools, audit
+├── rmng-nervous/    # Ollama adapter
+├── rmng-cli/        # rmng binary
+├── rmngd/           # Unix socket daemon
+└── schemas/         # JSON intent schemas
 ```
 
-## Build
+## Commands
 
 ```bash
 cd ~/dev/projects/RMNG-OS/agents
 cargo build
-cargo test
+
+rmng status
+rmng tools
+rmng run -f schemas/kernel-status.intent.json
+rmng ask "check kernel environment" --dry-run   # needs Ollama
 ```
 
 ## Specs
 
 - [REQUIREMENTS.md](../docs/REQUIREMENTS.md)
 - [ARCHITECTURE.md](../docs/ARCHITECTURE.md)
-- [DECISIONS.md](../docs/DECISIONS.md) — ADR-009–012
+- [DECISIONS.md](../docs/DECISIONS.md)

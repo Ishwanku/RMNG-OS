@@ -6,6 +6,7 @@ pub enum PermissionVerdict {
     Deny(String),
 }
 
+#[derive(Clone)]
 pub struct PermissionGate {
     allowed_tools: Vec<String>,
 }

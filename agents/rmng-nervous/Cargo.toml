@@ -1,19 +1,15 @@
 [package]
-name = "rmng-cli"
-description = "RMNG-OS CLI"
+name = "rmng-nervous"
+description = "RMNG-OS nervous system adapters (LLM → JSON intents)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[[bin]]
-name = "rmng"
-path = "src/main.rs"
-
 [dependencies]
 rmng-core = { path = "../rmng-core" }
-rmng-nervous = { path = "../rmng-nervous" }
-clap.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
+reqwest.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true

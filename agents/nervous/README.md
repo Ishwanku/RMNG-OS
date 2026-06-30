@@ -1,13 +1,18 @@
-# Nervous System Adapters
+# Nervous System
 
-LLM adapters that emit JSON intents only — no direct tool execution.
+LLM adapters live in the `rmng-nervous` crate (`../rmng-nervous/`).
 
-## Planned
+## Ollama (default)
 
-| Adapter | Default | Role |
-|---------|---------|------|
-| `ollama` | Yes | Local reasoning via Ollama API |
-| `openai` | No | External API — intents only |
-| `anthropic` | No | External API — intents only |
+```bash
+ollama serve
+ollama pull llama3.2
 
-Phase 5 delivers the Ollama adapter stub next.
+# Dry-run: get intent JSON only
+rmng ask "check kernel build status" --dry-run
+
+# Full pipeline: intent → permission → tool
+rmng ask "check kernel build status"
+```
+
+Environment: `OLLAMA_HOST` can be passed via `--ollama` flag.

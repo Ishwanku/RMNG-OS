@@ -102,6 +102,22 @@ git commit -m "Describe change"
 git push origin main
 ```
 
+
+## RMNG CLI (Phase 5)
+
+```bash
+cd ~/dev/projects/RMNG-OS/agents
+cargo build
+
+rmng status
+rmng tools
+rmng run -f schemas/kernel-status.intent.json
+
+# With Ollama running:
+rmng ask "check kernel build status" --dry-run
+rmng ask "check kernel build status"
+```
+
 ## Troubleshooting
 
 | Problem | Solution |
