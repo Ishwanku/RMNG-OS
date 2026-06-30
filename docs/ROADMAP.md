@@ -37,8 +37,8 @@ Goal: Turn the environment into a daily-use kernel lab with faster iteration and
 
 | Task | Priority | Notes |
 |------|----------|-------|
-| Generate slim config with `localmodconfig` | High | Cuts build from ~14 GB → ~3–5 GB |
-| Document config diff vs full WSL config | Medium | Add `config/wsl-kernel.config.slim.example` |
+| Generate slim config with `localmodconfig` | High | ✅ 8821 → 5498 lines, 19 modules |
+| Document config diff vs full WSL config | Medium | ✅ `config/wsl-kernel.config.slim.example` |
 | `make menuconfig` walkthrough | Medium | Document in `docs/config-guide.md` |
 
 ### 2.3 Rebuild Performance
@@ -81,7 +81,7 @@ Goal: Make the kernel build distinctly "RMNG" without forking the entire tree.
 
 ---
 
-## Phase 4 — Advanced (Optional)
+## Phase 4 — Advanced Kernel (Optional)
 
 | Task | Notes |
 |------|-------|
@@ -89,6 +89,33 @@ Goal: Make the kernel build distinctly "RMNG" without forking the entire tree.
 | eBPF / BTF experiments | Tools already built (pahole, dwarves) |
 | GitHub Actions | Lint scripts only — no kernel CI (too heavy) |
 | Cross-compile or module-only CI | Lightweight automation |
+
+---
+
+## Phase 5 — AI Agent Foundation (after Phase 2–3)
+
+Goal: Scaffold the agent runtime without disrupting kernel work. See [VISION.md](VISION.md).
+
+| Task | Notes |
+|------|-------|
+| `agents/` runtime scaffold | ✅ placeholder README |
+| `integrations/` adapter layout | ✅ placeholder README |
+| Local LLM / API bridge service | Python or Rust service |
+| Tool registry (shell, git, files) | Structured JSON schemas |
+| `gh auth login` in WSL | Git push from Ubuntu |
+
+## Phase 6 — Workflow Integrations
+
+| Domain | Priority |
+|--------|----------|
+| Development (git, build, kernel) | High — natural extension of today |
+| Data & files | Medium |
+| Cloud & infra | Medium |
+| Creative & business | Later |
+
+## Phase 7 — Agent Orchestration
+
+Multi-agent routing, shared memory, permissions, UI/CLI shell.
 
 ---
 
@@ -102,12 +129,11 @@ cd ~/dev/projects/RMNG-OS
 # 2. Check status
 ~/scripts/rmng-status.sh
 
-# 3. Slim config (recommended before next build)
-source ~/scripts/kernel-env.sh
-make -C "$KSRC" O="$KBUILD" localmodconfig
+# 3. Slim config (done — or re-run)
+~/dev/projects/RMNG-OS/scripts/slim-config.sh
 
-# 4. Rebuild and measure ccache
-time make -C "$KSRC" O="$KBUILD" -j6
+# 4. Rebuild with slim config and measure ccache
+~/scripts/rmng-build.sh
 
 # 5. Open project in VS Code
 code ~/dev/projects/RMNG-OS
