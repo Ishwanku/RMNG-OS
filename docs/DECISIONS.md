@@ -267,3 +267,29 @@ Schedule **bare-metal boot capability in Phase 4** (Advanced Kernel), before ful
 | ADR | Topic | Options |
 |-----|-------|---------|
 | ADR-013 | Monorepo vs split repos for agents | Monorepo · split |
+## ADR-014: Agents, skills, and MCP — native-first, BYO-LLM
+
+**Date:** 2026-06-30  
+**Status:** **Accepted**
+
+### Context
+Top GitHub OSS ecosystems (MCP, agent skills, orchestration frameworks) offer thousands of tools. RMNG-OS must adopt selectively without violating ADR-010 nervous/body separation or low-overhead philosophy.
+
+### Decision
+1. **Native Rust tools** remain the production execution path.
+2. **Skills** ship in-repo under  (Agent Skills format).
+3. **MCP** is dev-time IDE assist via local config; optional gated  bridge in Phase 6b.
+4. **Agent definitions** in  are RMNG specialists only.
+5. Discovery indexes (awesome-mcp-servers) are referenced, never vendored.
+
+### Consequences
+- ✅ Plan: 
+- ⚠️ MCP allowlist required before production bridge
+
+---
+
+## Pending decisions
+
+| ADR | Topic | Options |
+|-----|-------|---------|
+| ADR-015 | Monorepo vs split repos for Rust runtime | Monorepo · split |
