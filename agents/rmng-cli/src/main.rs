@@ -1,9 +1,9 @@
 use clap::{Parser, Subcommand};
 use rmng_core::{
-    daemon_running, parse_incoming, send_intent_json, HandleResponse, Intent, PermissionGate,
-    PermissionVerdict, RmngConfig, Runtime, socket_path,
+    daemon_running, parse_incoming, send_intent_json, CoreIntent, HandleResponse, Intent,
+    PermissionGate, PermissionVerdict, RmngConfig, Runtime, socket_path,
 };
-use rmng_nervous::NervousConnector;
+use rmng_nervous::{load_skill, NervousConnector};
 
 #[derive(Parser)]
 #[command(name = "rmng", about = "RMNG-OS CLI", version)]
@@ -29,18 +29,58 @@ enum Commands {
         #[arg(short, long)]
         file: String,
     },
-    /// Nervous system: config-driven LLM → JSON intent → optional execution
+    /// Nervous system: config-driven LLM → v2 CoreIntent → rmngd dispatch
     Ask {
         prompt: String,
-        #[arg(long)]
+        #[arg(short = 's', long = "skill", help = "Load skills/<name>/SKILL.md as context")]
+        skill: Option<String>,
+        #[arg(long, help = "Produce intent only; do not dispatch to rmngd")]
         dry_run: bool,
-        #[arg(long, help = "Force local Runtime instead of rmngd")]
-        local: bool,
     },
     /// List allowed tools
     Tools,
     /// Show runtime status
     Status,
+}
+
+/// Dispatch v2 intent to rmngd only — CLI never executes tools locally.
+async fn dispatch_core_intent(intent: &CoreIntent, dry_run: bool) -> i32 {
+    println!(
+        "Intent: {}",
+        serde_json::to_string_pretty(intent).expect("serialize intent")
+    );
+
+    if dry_run {
+        return 0;
+    }
+
+    match intent {
+        CoreIntent::PlanOnly { reasoning, .. } => {
+            println!("{reasoning}");
+            0
+        }
+        CoreIntent::ToolExecute { .. } | CoreIntent::McpProxy { .. } => {
+            if !daemon_running() {
+                eprintln!(
+                    "rmngd not running — start: systemctl --user start rmngd\n(socket: {})",
+                    socket_path().display()
+                );
+                return 1;
+            }
+            let json = serde_json::to_string(intent).expect("serialize core intent");
+            match send_intent_json(&json).await {
+                Ok(line) => {
+                    let resp: HandleResponse = serde_json::from_str(line.trim())
+                        .unwrap_or_else(|e| HandleResponse::failure(e.to_string()));
+                    print_response(&resp)
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    1
+                }
+            }
+        }
+    }
 }
 
 fn print_response(resp: &HandleResponse) -> i32 {
@@ -145,17 +185,30 @@ async fn main() {
                 }
             }
         }
-        Commands::Ask { prompt, dry_run, local } => {
-            let connector = NervousConnector::load();
-            match connector.reason(&prompt).await {
-                Ok(intent) => {
-                    println!("Intent: {}", serde_json::to_string_pretty(&intent).unwrap());
-                    if dry_run {
-                        0
-                    } else {
-                        execute_intent(&intent, !local).await
+        Commands::Ask {
+            prompt,
+            skill,
+            dry_run,
+        } => {
+            let loaded_skill = match skill.as_deref() {
+                Some(name) => match load_skill(name) {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        eprintln!("skill error: {e}");
+                        std::process::exit(1);
                     }
-                }
+                },
+                None => None,
+            };
+
+            let connector = NervousConnector::load();
+            let skill_ref = loaded_skill.as_ref();
+            let skill_name = skill.as_deref();
+            match connector
+                .reason_core(&prompt, skill_name, skill_ref)
+                .await
+            {
+                Ok(intent) => dispatch_core_intent(&intent, dry_run).await,
                 Err(e) => {
                     eprintln!("nervous system: {e}");
                     1
@@ -171,7 +224,7 @@ async fn main() {
         Commands::Status => {
             let cfg = RmngConfig::load();
             let connector = NervousConnector::from_config(cfg);
-            println!("rmng 0.1.0 — Phase 5 (BYO-LLM)");
+            println!("rmng 0.1.0 — Phase 6c (BYO-LLM + skills)");
             println!("runtime: rmng-core");
             println!("nervous: {} ({})", connector.provider_label(), RmngConfig::config_path().display());
             println!("audit log: {}", rmng_core::AuditLog::default_path().display());

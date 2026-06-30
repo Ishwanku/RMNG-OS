@@ -14,3 +14,4 @@ reqwest.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+serde_yaml.workspace = true

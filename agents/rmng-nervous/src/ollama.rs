@@ -1,4 +1,4 @@
-use rmng_core::Intent;
+use rmng_core::CoreIntent;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -58,11 +58,17 @@ impl OllamaAdapter {
         Ok(self.client.get(&url).send().await?.status().is_success())
     }
 
-    pub async fn reason(&self, user_prompt: &str) -> Result<Intent, NervousError> {
-        let system = r#"You are the RMNG-OS nervous system. Output ONLY valid JSON matching this schema:
-{"schema_version":"1","intent_id":"<uuid>","kind":"tool_request|plan|clarify|complete","summary":"...","tool":{"name":"kernel.status|kernel.build|kernel.apply_patches","args":{}}}
-Never output shell commands. Never access the system directly."#;
-        let prompt = format!("{system}\n\nUser request: {user_prompt}");
+    pub async fn reason_core(
+        &self,
+        assembled_prompt: &str,
+        skill_name: Option<&str>,
+    ) -> Result<CoreIntent, NervousError> {
+        let skill_note = skill_name
+            .map(|n| format!("\nInclude metadata.skill_name = \"{n}\" when appropriate."))
+            .unwrap_or_default();
+        let prompt = format!(
+            "{assembled_prompt}{skill_note}\n\nRespond with a single JSON object for core-intent v2."
+        );
         let url = format!("{}/api/generate", self.base_url.trim_end_matches('/'));
         let body = GenerateRequest {
             model: &self.model,
@@ -80,6 +86,6 @@ Never output shell commands. Never access the system directly."#;
             .map_err(|e| NervousError::Ollama(e.to_string()))?
             .json()
             .await?;
-        Intent::parse(&resp.response).map_err(NervousError::InvalidIntent)
+        CoreIntent::parse(&resp.response).map_err(NervousError::InvalidIntent)
     }
 }
