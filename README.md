@@ -1,128 +1,130 @@
 # RMNG-OS
 
-A personal Linux kernel development environment for **WSL2**, focused on compiling and experimenting with the Linux kernel from source, performance tuning, and clean development workflows.
+A personal Linux kernel development lab for **WSL2** — out-of-tree builds, ccache-accelerated rebuilds, performance tuning, and clean development workflows.
 
-This repository contains **tooling and configuration only** — not the Linux kernel source tree or build artifacts. Clone [torvalds/linux](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git) separately.
+**Repository:** https://github.com/Ishwanku/RMNG-OS
 
-## Features
+## Project Status
 
-- Out-of-tree kernel builds (keeps source tree clean)
-- **ccache** integration for faster rebuilds
-- WSL2 performance tuning (`wsl.conf` + `.wslconfig` templates)
-- Sanitized baseline kernel config for WSL2 (see `config/`)
-- VS Code + WSL workflow support
+| Phase | Name | Status |
+|-------|------|--------|
+| **1** | Environment & First Build | ✅ Complete |
+| **2** | Active Development Workflow | 🔄 **Current** |
+| **3** | Customization & RMNG Identity | Planned |
+| **4** | Advanced (custom WSL kernel, eBPF) | Optional |
 
-## Prerequisites
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the full plan.
 
-- Windows 10/11 with WSL2
-- Ubuntu 24.04 LTS
-- Build tools: `build-essential`, `flex`, `bison`, `libssl-dev`, `libelf-dev`, `libncurses-dev`, `bc`, `rsync`, `kmod`, `cpio`, `dwarves`, `zstd`, `ccache`
+### Phase 1 Achievements
 
-```bash
-sudo apt update
-sudo apt install -y build-essential libncurses-dev bison flex libssl-dev \
-  libelf-dev bc rsync kmod cpio dwarves zstd libudev-dev libiberty-dev \
-  pkg-config ccache git python3
-```
+- Ubuntu 24.04 LTS on WSL2 with 12 GB RAM / 6 CPUs
+- Full kernel toolchain + ccache
+- Kernel source cloned at `~/dev/kernel/linux`
+- First out-of-tree build succeeded (`vmlinux` ~458 MB)
+- VS Code + WSL integration working
 
-## Quick Start
+## What This Repo Contains
 
-### 1. Clone this repository
-
-```bash
-mkdir -p ~/dev/projects
-cd ~/dev/projects
-git clone https://github.com/Ishwanku/RMNG-OS.git
-```
-
-### 2. Set up folder structure
-
-```bash
-mkdir -p ~/dev/kernel ~/build/kernel ~/scripts
-cp ~/dev/projects/RMNG-OS/scripts/kernel-env.sh ~/scripts/
-chmod +x ~/scripts/kernel-env.sh
-```
-
-### 3. Clone kernel source (separate repo)
-
-```bash
-cd ~/dev/kernel
-git clone --depth=1 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
-```
-
-### 4. Optional — apply ccache to shell
-
-```bash
-cat ~/dev/projects/RMNG-OS/dotfiles/bashrc.ccache.snippet >> ~/.bashrc
-```
-
-### 5. Build the kernel (out-of-tree)
-
-```bash
-source ~/scripts/kernel-env.sh
-
-# Use the example config as a starting point
-cp ~/dev/projects/RMNG-OS/config/wsl-kernel.config.example "$KBUILD/.config"
-make -C "$KSRC" O="$KBUILD" olddefconfig
-
-# Compile (adjust -j to your CPU count)
-make -C "$KSRC" O="$KBUILD" -j6
-```
-
-### 6. Verify
-
-```bash
-ls -lh ~/build/kernel/vmlinux
-ccache -s
-```
-
-## Repository Structure
+**Tooling and configuration only** — not the Linux kernel source or build artifacts.
 
 ```
 RMNG-OS/
 ├── README.md
-├── LICENSE
+├── LICENSE                         # MIT
 ├── .gitignore
 ├── scripts/
-│   └── kernel-env.sh       # Build environment variables
+│   ├── kernel-env.sh               # KSRC, KBUILD, ccache vars
+│   ├── build.sh                    # Standardized make wrapper
+│   ├── status.sh                   # Environment health check
+│   ├── workspace-setup.sh          # One-time workspace wiring
+│   └── make-config-example.sh      # Regenerate config from local build
 ├── config/
-│   ├── wsl.conf.example    # WSL distro config (inside Ubuntu)
-│   ├── wslconfig.example   # WSL2 limits (Windows-side)
-│   └── wsl-kernel.config.example  # Sanitized kernel .config baseline
-├── docs/
-│   └── setup.md            # Full setup guide
-└── dotfiles/
-    └── bashrc.ccache.snippet
+│   ├── wsl.conf.example
+│   ├── wslconfig.example
+│   └── wsl-kernel.config.example   # Sanitized WSL2 baseline .config
+└── docs/
+    ├── setup.md                    # Full install guide
+    ├── ROADMAP.md                  # Phase plan
+    └── daily-workflow.md           # Common commands
 ```
+
+## Quick Start (Existing Machine)
+
+If you already completed Phase 1 setup:
+
+```bash
+cd ~/dev/projects/RMNG-OS
+./scripts/workspace-setup.sh    # wire symlinks
+~/scripts/rmng-status.sh        # verify everything
+```
+
+## Fresh Install
+
+See [docs/setup.md](docs/setup.md) for the complete guide.
+
+```bash
+git clone https://github.com/Ishwanku/RMNG-OS.git ~/dev/projects/RMNG-OS
+cd ~/dev/projects/RMNG-OS
+./scripts/workspace-setup.sh
+```
+
+Clone kernel source separately:
+
+```bash
+git clone --depth=1 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git ~/dev/kernel/linux
+```
+
+## Build the Kernel
+
+```bash
+source ~/scripts/kernel-env.sh
+~/scripts/rmng-build.sh         # make -j6 out-of-tree
+```
+
+Or manually:
+
+```bash
+cp config/wsl-kernel.config.example ~/build/kernel/.config
+make -C ~/dev/kernel/linux O=~/build/kernel olddefconfig
+make -C ~/dev/kernel/linux O=~/build/kernel -j6
+```
+
+## Phase 2 — Next Steps
+
+1. **Slim the config** — `make localmodconfig` (cuts build size ~14 GB → ~3–5 GB)
+2. **Benchmark ccache** — incremental rebuild after a one-line change
+3. **Build a single module** — `make M=drivers/char modules`
+4. **Apply a test patch** — custom `LOCALVERSION` or printk change
+5. **Auth git in WSL** — `gh auth login` for painless `git push`
+
+Details: [docs/ROADMAP.md](docs/ROADMAP.md) · [docs/daily-workflow.md](docs/daily-workflow.md)
 
 ## WSL Optimization
 
-Copy and adapt the example configs:
+| File | Install to | Purpose |
+|------|------------|---------|
+| `config/wsl.conf.example` | `/etc/wsl.conf` | systemd, automount |
+| `config/wslconfig.example` | `C:\Users\<you>\.wslconfig` | RAM, CPU, swap |
 
-| File | Location | Purpose |
-|------|----------|---------|
-| `config/wsl.conf.example` | `/etc/wsl.conf` | systemd, automount tuning |
-| `config/wslconfig.example` | `C:\Users\<you>\.wslconfig` | RAM, CPU, swap limits |
-
-After changes: `wsl --shutdown` from PowerShell, then reopen Ubuntu.
+Apply with `wsl --shutdown` from PowerShell.
 
 ## VS Code
 
 ```bash
-cd ~/dev/kernel/linux
-code .
+code ~/dev/projects/RMNG-OS     # project repo
+code ~/dev/kernel/linux         # kernel source
 ```
-
-Install the **WSL** extension and use **Reopen in WSL**.
 
 ## What Is NOT in This Repo
 
-- Linux kernel source (`~/dev/kernel/linux`) — clone separately
-- Build output (`~/build/kernel/`) — generated locally
-- ccache data (`~/.ccache/`) — local cache
+| Excluded | Location | Size (typical) |
+|----------|----------|----------------|
+| Kernel source | `~/dev/kernel/linux` | ~2–6 GB |
+| Build output | `~/build/kernel` | ~3–14 GB |
+| ccache | `~/.ccache` | ~1–2 GB |
 
 ## License
 
 MIT License — see [LICENSE](LICENSE).
 
-**Note:** The Linux kernel source you compile separately is licensed under **GPLv2**. This repository's scripts and configs are MIT-licensed tooling only.
+The Linux kernel source you compile separately is **GPLv2**. This repo contains MIT-licensed tooling only.
