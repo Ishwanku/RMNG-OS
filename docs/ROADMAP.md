@@ -56,6 +56,7 @@ Goal: Turn the environment into a daily-use kernel lab with faster iteration and
 | Build a single module (`make M=...`) | High | e.g. `drivers/char` |
 | Apply a trivial patch (LOCALVERSION, printk) | High | Learn patch workflow |
 | Kernel change journal in `docs/experiments/` | Medium | Log what you tried |
+| Requirements & architecture docs | High | ✅ REQUIREMENTS.md, ARCHITECTURE.md, DECISIONS.md |
 
 ### 2.5 Repository & Docs
 

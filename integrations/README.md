@@ -23,4 +23,6 @@ Each integration should expose:
 - `auth` — credential requirements
 - `permissions` — what the agent may access
 
-**Status:** Not implemented. Complete [Layer 1 kernel foundation](../docs/ROADMAP.md) first.
+**Status:** Not implemented.
+
+**Specs:** [REQUIREMENTS.md](../docs/REQUIREMENTS.md) (FR-L3-*) · [ARCHITECTURE.md](../docs/ARCHITECTURE.md) (Layer 3) · Complete [Layer 1](../docs/ROADMAP.md) first.

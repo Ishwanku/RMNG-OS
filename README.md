@@ -19,6 +19,19 @@ A personal **AI Agent-first OS** project — starting with a rock-solid **Linux 
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full plan.
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/INDEX.md](docs/INDEX.md) | **Start here** — documentation hub |
+| [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | Functional & non-functional requirements |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture & diagrams |
+| [docs/VISION.md](docs/VISION.md) | AI-first OS vision |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phased delivery plan |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Architecture decision records |
+| [docs/setup.md](docs/setup.md) | WSL install guide |
+| [docs/daily-workflow.md](docs/daily-workflow.md) | Daily commands |
+
 ### Phase 1 Achievements
 
 - Ubuntu 24.04 LTS on WSL2 with 12 GB RAM / 6 CPUs
@@ -46,9 +59,16 @@ RMNG-OS/
 │   ├── wsl.conf.example
 │   ├── wslconfig.example
 │   └── wsl-kernel.config.example   # Sanitized WSL2 baseline .config
+├── agents/                         # Future agent runtime (placeholder)
+├── integrations/                   # Future workflow adapters (placeholder)
 └── docs/
-    ├── setup.md                    # Full install guide
+    ├── INDEX.md                    # Documentation hub
+    ├── REQUIREMENTS.md             # Requirements specification
+    ├── ARCHITECTURE.md             # Technical architecture
+    ├── VISION.md                   # AI-first OS vision
     ├── ROADMAP.md                  # Phase plan
+    ├── DECISIONS.md                # Architecture decisions
+    ├── setup.md                    # Full install guide
     └── daily-workflow.md           # Common commands
 ```
 
