@@ -1,0 +1,16 @@
+[Unit]
+Description=RMNG-OS agent daemon (rmngd) — local execution plane
+Documentation=https://github.com/Ishwanku/RMNG-OS
+After=default.target
+ConditionPathExists=%h/.cargo/bin/rmngd
+
+[Service]
+Type=simple
+ExecStart=%h/.cargo/bin/rmngd
+Restart=on-failure
+RestartSec=3
+Environment=RUST_LOG=info
+Environment=RMNG_PROJECT_ROOT=%h/dev/projects/RMNG-OS
+
+[Install]
+WantedBy=default.target

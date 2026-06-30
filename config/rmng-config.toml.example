@@ -1,0 +1,11 @@
+# RMNG-OS BYO-LLM configuration
+# Install: cp config/rmng-config.toml.example ~/.rmng/config.toml
+
+[llm]
+# Options: none | ollama | openai | anthropic | custom
+llm_provider = "none"
+
+# Provider-specific (uncomment when wiring a live engine):
+# endpoint_url = "http://127.0.0.1:11434"
+# api_key_env_var = "OPENAI_API_KEY"
+# model = "llama3.2"

@@ -1,6 +1,7 @@
-//! RMNG-OS runtime core — intent parsing, permissions, tool dispatch, audit, IPC.
+//! RMNG-OS runtime core — intent parsing, permissions, tool dispatch, audit, IPC, config.
 
 pub mod audit;
+pub mod config;
 pub mod dispatch;
 pub mod error;
 pub mod intent;
@@ -11,6 +12,7 @@ pub mod tool;
 pub mod tools;
 
 pub use audit::{AuditEntry, AuditLog};
+pub use config::{LlmConfig, LlmProvider, RmngConfig};
 pub use dispatch::Runtime;
 pub use error::RmngError;
 pub use intent::{Intent, IntentKind, ToolRequest};

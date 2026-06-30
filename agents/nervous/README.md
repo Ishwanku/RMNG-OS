@@ -1,18 +1,20 @@
-# Nervous System
+# Nervous System (BYO-LLM)
 
-LLM adapters live in the `rmng-nervous` crate (`../rmng-nervous/`).
+The nervous system emits JSON intents only. Implementation: `rmng-nervous` crate.
 
-## Ollama (default)
+## Configuration
+
+`~/.rmng/config.toml` — see `config/rmng-config.toml.example`
+
+| `llm_provider` | Behavior |
+|----------------|----------|
+| `none` (default) | Mock intents — no network calls |
+| `ollama` | Live Ollama `/api/generate` |
+| `openai` / `anthropic` / `custom` | Scaffolded — not wired yet |
+
+## Usage
 
 ```bash
-ollama serve
-ollama pull llama3.2
-
-# Dry-run: get intent JSON only
-rmng ask "check kernel build status" --dry-run
-
-# Full pipeline: intent → permission → tool
-rmng ask "check kernel build status"
+rmng ask "show git status" --dry-run    # mock → git.status intent
+rmng ask "plan next phase" --dry-run    # mock → plan intent
 ```
-
-Environment: `OLLAMA_HOST` can be passed via `--ollama` flag.

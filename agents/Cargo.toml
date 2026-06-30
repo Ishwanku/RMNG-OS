@@ -23,4 +23,5 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "fs
 clap = { version = "4", features = ["derive"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+toml = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

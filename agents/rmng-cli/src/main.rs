@@ -1,9 +1,9 @@
 use clap::{Parser, Subcommand};
 use rmng_core::{
     daemon_running, send_intent_json, HandleResponse, Intent, PermissionGate, PermissionVerdict,
-    Runtime, socket_path,
+    RmngConfig, Runtime, socket_path,
 };
-use rmng_nervous::OllamaAdapter;
+use rmng_nervous::NervousConnector;
 
 #[derive(Parser)]
 #[command(name = "rmng", about = "RMNG-OS CLI", version)]
@@ -29,16 +29,12 @@ enum Commands {
         #[arg(short, long)]
         file: String,
     },
-    /// Ask Ollama to produce an intent, then execute via daemon if running
+    /// Nervous system: config-driven LLM → JSON intent → optional execution
     Ask {
         prompt: String,
-        #[arg(long, default_value = "http://127.0.0.1:11434")]
-        ollama: String,
-        #[arg(long, default_value = "llama3.2")]
-        model: String,
         #[arg(long)]
         dry_run: bool,
-        #[arg(long)]
+        #[arg(long, help = "Force local Runtime instead of rmngd")]
         local: bool,
     },
     /// List allowed tools
@@ -121,7 +117,7 @@ async fn main() {
         Commands::Send { file } => {
             if !daemon_running() {
                 eprintln!(
-                    "rmngd not running — start: rmngd &\n(socket: {})",
+                    "rmngd not running — start: systemctl --user start rmngd\n(socket: {})",
                     socket_path().display()
                 );
                 1
@@ -142,24 +138,20 @@ async fn main() {
                 }
             }
         }
-        Commands::Ask {
-            prompt,
-            ollama,
-            model,
-            dry_run,
-            local,
-        } => {
-            let adapter = OllamaAdapter::new(ollama, model);
-            if !adapter.health().await.unwrap_or(false) {
-                eprintln!("Ollama not reachable — start with: ollama serve");
-                1
-            } else {
-                let intent = adapter.reason(&prompt).await.expect("ollama intent");
-                println!("Intent: {}", serde_json::to_string_pretty(&intent).unwrap());
-                if dry_run {
-                    0
-                } else {
-                    execute_intent(&intent, !local).await
+        Commands::Ask { prompt, dry_run, local } => {
+            let connector = NervousConnector::load();
+            match connector.reason(&prompt).await {
+                Ok(intent) => {
+                    println!("Intent: {}", serde_json::to_string_pretty(&intent).unwrap());
+                    if dry_run {
+                        0
+                    } else {
+                        execute_intent(&intent, !local).await
+                    }
+                }
+                Err(e) => {
+                    eprintln!("nervous system: {e}");
+                    1
                 }
             }
         }
@@ -170,22 +162,17 @@ async fn main() {
             0
         }
         Commands::Status => {
-            println!("rmng 0.1.0 — Phase 5");
+            let cfg = RmngConfig::load();
+            let connector = NervousConnector::from_config(cfg);
+            println!("rmng 0.1.0 — Phase 5 (BYO-LLM)");
             println!("runtime: rmng-core");
-            println!("nervous: rmng-nervous (ollama)");
+            println!("nervous: {} ({})", connector.provider_label(), RmngConfig::config_path().display());
             println!("audit log: {}", rmng_core::AuditLog::default_path().display());
             println!(
                 "rmngd: {} ({})",
-                if daemon_running() {
-                    "running"
-                } else {
-                    "stopped"
-                },
+                if daemon_running() { "running" } else { "stopped" },
                 socket_path().display()
             );
-            let adapter = OllamaAdapter::default();
-            let ollama = adapter.health().await.unwrap_or(false);
-            println!("ollama: {}", if ollama { "reachable" } else { "not running" });
             0
         }
     };

@@ -1,0 +1,22 @@
+{
+  "name": "dev.git",
+  "version": "0.1.0",
+  "description": "Git repository monitoring — no shell, direct git invocation",
+  "auth": { "type": "none" },
+  "tools": [
+    {
+      "name": "git.status",
+      "description": "Porcelain git status for a repository",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to git repository (defaults to RMNG_PROJECT_ROOT)"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

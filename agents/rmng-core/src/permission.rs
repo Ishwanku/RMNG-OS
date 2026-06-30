@@ -18,6 +18,7 @@ impl Default for PermissionGate {
                 "kernel.status".into(),
                 "kernel.build".into(),
                 "kernel.apply_patches".into(),
+                "git.status".into(),
             ],
         }
     }
@@ -54,6 +55,22 @@ mod tests {
     use super::*;
     use crate::intent::{Intent, IntentKind};
     use uuid::Uuid;
+
+    #[test]
+    fn allows_git_status() {
+        let gate = PermissionGate::default();
+        let intent = Intent {
+            schema_version: "1".into(),
+            intent_id: Uuid::new_v4(),
+            kind: IntentKind::ToolRequest,
+            summary: "git".into(),
+            tool: Some(crate::intent::ToolRequest {
+                name: "git.status".into(),
+                args: serde_json::json!({}),
+            }),
+        };
+        assert!(matches!(gate.evaluate(&intent), PermissionVerdict::Allow));
+    }
 
     #[test]
     fn denies_unknown_tool() {
