@@ -15,6 +15,9 @@ Intent-shaping guides for the nervous system (BYO-LLM). **Do not execute tools d
 | Doc ingestion | [doc-ingestion/SKILL.md](doc-ingestion/SKILL.md) | Markitdown MCP for PDF/Office files |
 | Doc summarization | [doc-summarization/SKILL.md](doc-summarization/SKILL.md) | Session-aware synthesis of tool results |
 | Source evaluation | [source-evaluation/SKILL.md](source-evaluation/SKILL.md) | Integration track scoring for external repos |
+| Self-critique | [self-critique/SKILL.md](self-critique/SKILL.md) | LLM-as-judge rubric (plan.only) |
+| Output validation | [output-validation/SKILL.md](output-validation/SKILL.md) | Deterministic + threshold gate |
+| Improvement loop | [improvement-loop/SKILL.md](improvement-loop/SKILL.md) | Bounded recall-critique-validate cycle |
 | Memory management | [memory-management/SKILL.md](memory-management/SKILL.md) | Mem0 long-term memory hygiene and privacy |
 | MCP integration | [mcp-integration/SKILL.md](mcp-integration/SKILL.md) | Track 2 MCP proxy usage and allowlist rules |
 | Spec compliance | [spec-compliance/SKILL.md](spec-compliance/SKILL.md) | agentskills.io + CoreIntent v2 alignment |

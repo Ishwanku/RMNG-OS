@@ -1,11 +1,14 @@
 id: browser-researcher
 layer: L3
 description: >-
-  Opt-in browser interaction specialist — DOM navigation via Playwright MCP only.
-  Disabled at allowlist level by default. No fetch, git, or kernel ops.
+  Opt-in browser interaction specialist — Playwright MCP with self-critique
+  on DOM observations. No fetch, git, or kernel ops.
 skills:
   - browser-research
   - source-evaluation
+  - self-critique
+  - output-validation
+  - improvement-loop
   - mcp-integration
   - phase-gates
 allowed_native_tools: []
@@ -14,4 +17,4 @@ allowed_mcp_tools:
   - playwright:browser_snapshot
   - playwright:browser_click
 delegates_to: []
-daily_budget_usd: 3.0
+daily_budget_usd: 3.5

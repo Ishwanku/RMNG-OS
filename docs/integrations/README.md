@@ -12,6 +12,8 @@ Per-repository evaluation records for open-source AI/agent/MCP projects consider
 | [git-mcp.md](git-mcp.md) | `mcp-server-git` | 2 — MCP Proxy | **Active** (allowlisted) |
 | [mcp-fetch.md](mcp-fetch.md) | `@modelcontextprotocol/server-fetch` | 2 — MCP Proxy | **Active** (Sprint 13 E2E) |
 | [mem0-mcp.md](mem0-mcp.md) | `mem0-mcp-server` | 2 — MCP Proxy | **Active** (Sprint 15, opt-in) |
+| [evaluation-usage.md](evaluation-usage.md) | — | Guide | **Active** (Sprint 16) |
+| [promptfoo-patterns.md](promptfoo-patterns.md) | promptfoo | 3 — Skill | **Active** |
 | [memory-usage.md](memory-usage.md) | — | Guide | **Active** |
 | [markitdown-mcp.md](markitdown-mcp.md) | `markitdown-mcp` | 2 — MCP Proxy | **Active** (Sprint 13) |
 | [web-research-usage.md](web-research-usage.md) | — | Guide | **Active** |

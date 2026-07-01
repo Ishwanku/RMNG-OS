@@ -20,3 +20,7 @@ Use when the user asks to research, summarize, or document external material.
 
 - `plan.only` — summarize evaluation of an external repo
 - `mcp.proxy` — `github.search_issues` with query scoped to RMNG-OS org
+
+## Evaluation
+
+After synthesis, apply `self-critique` then `output-validation` before handoff.

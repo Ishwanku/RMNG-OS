@@ -337,4 +337,24 @@ mod tests {
         let delegate = reg.find_delegate_for_tool("git.status").unwrap();
         assert_eq!(delegate.id, "repo-keeper");
     }
+
+    #[test]
+    fn l3_agents_include_evaluation_skills() {
+        let reg = fixture_registry();
+        let eval_skills = ["self-critique", "output-validation", "improvement-loop"];
+        for id in [
+            "research-curator",
+            "web-researcher",
+            "repo-keeper",
+            "browser-researcher",
+        ] {
+            let agent = reg.get(id).expect(id);
+            for skill in eval_skills {
+                assert!(
+                    agent.skills.iter().any(|s| s == skill),
+                    "{id} missing skill {skill}"
+                );
+            }
+        }
+    }
 }

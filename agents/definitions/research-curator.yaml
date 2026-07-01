@@ -1,11 +1,13 @@
 id: research-curator
 layer: L3
 description: >-
-  Research and documentation specialist — synthesizes findings, queries GitHub
-  issues via MCP, recalls long-term memory, and produces plan-only recommendations.
+  Research specialist — GitHub MCP, memory, self-critique, plan-only recommendations.
 skills:
   - research-workflow
   - memory-management
+  - self-critique
+  - output-validation
+  - improvement-loop
   - phase-gates
 allowed_native_tools:
   - github.pr_status
@@ -18,4 +20,4 @@ allowed_mcp_tools:
   - mem0:get_memory
   - mem0:delete_memory
 delegates_to: []
-daily_budget_usd: 1.5
+daily_budget_usd: 2.0
