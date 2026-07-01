@@ -16,7 +16,11 @@ pub mod tools;
 pub mod validator;
 
 pub use allowlist::{McpAllowlist, McpServerConfig};
-pub use audit::{AuditEntry, AuditLog, AuditTrack};
+pub use audit::{
+    AuditCategory, AuditEntry, AuditLog, AuditTrack, ChainVerifyResult, AUDIT_GENESIS_HASH,
+    AUDIT_SCHEMA_VERSION,
+};
+pub use rmng_mcp::{IsolationLimits, IsolationReport, McpCallResult};
 pub use registry::{IntegrationManifest, IntegrationRegistry, ToolManifest};
 pub use session::{
     build_tool_result_record, persist_dispatch_to_session, session_ttl_days, AgentSession,

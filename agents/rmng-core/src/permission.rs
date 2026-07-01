@@ -129,6 +129,7 @@ mod tests {
                 command: "uvx".into(),
                 args: vec!["mcp-server-git".into()],
                 allowed_tools: vec!["git.log".into()],
+                isolation: None,
             },
         );
         PermissionGate::from_registry(&fixture_registry()).with_mcp_allowlist(McpAllowlist { servers })
@@ -175,6 +176,7 @@ mod tests {
                 command: "npx".into(),
                 args: vec!["@github/github-mcp-server".into()],
                 allowed_tools: vec!["search_issues".into(), "get_issue".into()],
+                isolation: None,
             },
         );
         PermissionGate::from_registry(&fixture_registry()).with_mcp_allowlist(McpAllowlist { servers })

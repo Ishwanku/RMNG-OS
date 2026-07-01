@@ -1,4 +1,5 @@
 use crate::RmngError;
+use rmng_mcp::IsolationLimits;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -10,6 +11,9 @@ pub struct McpServerConfig {
     pub command: String,
     pub args: Vec<String>,
     pub allowed_tools: Vec<String>,
+    /// Per-server isolation overrides (Sprint 10) — merged over global `[isolation]`.
+    #[serde(default)]
+    pub isolation: Option<IsolationLimits>,
 }
 
 /// Top-level allowlist: only explicitly configured servers may be proxied.

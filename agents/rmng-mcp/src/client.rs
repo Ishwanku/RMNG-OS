@@ -1,10 +1,12 @@
+use crate::isolation::{attach_pid, build_report, configure_command, prepare_cgroup, IsolationLimits, IsolationReport};
 use crate::McpError;
 use serde_json::{json, Value};
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::timeout;
+use tracing::{info, warn};
 
 const DEFAULT_CALL_TIMEOUT: Duration = Duration::from_secs(60);
 const KILL_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -23,6 +25,15 @@ pub fn wire_tool_name(allowlist_name: &str) -> String {
     allowlist_name.replace('.', "_")
 }
 
+/// Result of an isolated MCP subprocess call (Sprint 10).
+#[derive(Debug, Clone)]
+pub struct McpCallResult {
+    pub output: String,
+    pub pid: Option<u32>,
+    pub duration_ms: u64,
+    pub isolation: IsolationReport,
+}
+
 /// Spawn an allowlisted MCP server, run initialize handshake, and call one tool.
 pub async fn call_tool(
     command: &str,
@@ -30,15 +41,57 @@ pub async fn call_tool(
     tool_name: &str,
     tool_args: &Value,
 ) -> Result<String, McpError> {
+    call_tool_isolated(command, args, tool_name, tool_args, None)
+        .await
+        .map(|r| r.output)
+}
+
+/// Isolated MCP call with optional cgroup / rlimit constraints.
+pub async fn call_tool_isolated(
+    command: &str,
+    args: &[String],
+    tool_name: &str,
+    tool_args: &Value,
+    limits: Option<&IsolationLimits>,
+) -> Result<McpCallResult, McpError> {
+    let started = Instant::now();
+    let limits = limits.cloned().unwrap_or_default();
+    let (cgroup_path, cgroup_warnings) = if limits.is_active() {
+        prepare_cgroup(&limits)
+    } else {
+        (None, Vec::new())
+    };
+
     let wire_name = wire_tool_name(tool_name);
-    let mut child = Command::new(command)
-        .args(args)
+    let mut cmd = Command::new(command);
+    cmd.args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+
+    if limits.is_active() {
+        configure_command(&mut cmd, &limits);
+    }
+
+    let mut child = cmd
         .spawn()
         .map_err(|e| McpError::Spawn(format!("{command}: {e}")))?;
+
+    let pid = child.id();
+    if let (Some(ref cg), Some(pid)) = (&cgroup_path, pid) {
+        if let Err(e) = attach_pid(cg, pid) {
+            warn!(pid, error = %e, "cgroup attach failed");
+        }
+    }
+
+    info!(
+        command,
+        pid = ?pid,
+        tool = %tool_name,
+        isolated = limits.is_active(),
+        "mcp subprocess spawned"
+    );
 
     let stdin = child
         .stdin
@@ -55,23 +108,36 @@ pub async fn call_tool(
     )
     .await;
 
-    match call_result {
+    let output = match call_result {
         Ok(Ok(output)) => {
             cleanup_child(&mut child).await;
-            Ok(output)
+            output
         }
         Ok(Err(e)) => {
             cleanup_child(&mut child).await;
-            Err(e)
+            return Err(e);
         }
         Err(_) => {
             cleanup_child(&mut child).await;
-            Err(McpError::Timeout(format!(
+            return Err(McpError::Timeout(format!(
                 "mcp call {tool_name} exceeded {}s",
                 call_timeout().as_secs()
-            )))
+            )));
         }
+    };
+
+    let duration_ms = started.elapsed().as_millis() as u64;
+    let mut warnings = cgroup_warnings;
+    if limits.is_active() && cgroup_path.is_none() && limits.cgroup {
+        warnings.push("cgroup limits not applied".into());
     }
+
+    Ok(McpCallResult {
+        output,
+        pid,
+        duration_ms,
+        isolation: build_report(&limits, cgroup_path, warnings),
+    })
 }
 
 async fn cleanup_child(child: &mut Child) {
@@ -189,7 +255,6 @@ async fn read_response_for_id(
                 .cloned()
                 .ok_or_else(|| McpError::Protocol("response missing result".into()));
         }
-        // Skip notifications / unrelated messages
     }
     Err(McpError::Protocol(format!("no response for id {id}")))
 }

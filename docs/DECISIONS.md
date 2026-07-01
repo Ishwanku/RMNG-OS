@@ -142,6 +142,16 @@ Split licensing: **Proprietary** for core runtime + scripts/docs/config; **GPLv2
 
 ### Consequences
 - ✅ Full record: [docs/decisions/ADR-019-licensing-and-layering.md](decisions/ADR-019-licensing-and-layering.md)
+
+## ADR-020: Linux-aligned runtime hardening
+
+**Status:** **Accepted** (Sprint 10)
+
+- Tamper-evident audit log (hash chain, schema v3)
+- MCP subprocess isolation (cgroup v2, rlimits, no_new_privs)
+- Interface version enforcement at nervous→body boundary
+
+- ✅ Full record: [docs/decisions/ADR-020-linux-aligned-runtime-hardening.md](decisions/ADR-020-linux-aligned-runtime-hardening.md)
 - ✅ ADR-007 superseded
 - ⚠️ Update Cargo.toml workspace license metadata manually
 - ⚠️ Consider private repo if source confidentiality is required

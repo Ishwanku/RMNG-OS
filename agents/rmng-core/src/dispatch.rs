@@ -1,4 +1,5 @@
-use crate::audit::{AuditEntry, AuditLog, AuditTrack};
+use crate::audit::{AuditCategory, AuditEntry, AuditLog, AuditTrack};
+use crate::config::RmngConfig;
 use crate::intent::{CoreIntent, Intent, IntentKind};
 use crate::permission::{PermissionGate, PermissionVerdict};
 use crate::registry::IntegrationRegistry;
@@ -7,8 +8,7 @@ use crate::tool::ToolResult;
 use crate::tools;
 use crate::validator::IntentValidator;
 use crate::RmngError;
-use chrono::Utc;
-use rmng_mcp::call_tool as mcp_call_tool;
+use rmng_mcp::{call_tool_isolated, IsolationLimits};
 use std::time::Instant;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -155,13 +155,31 @@ impl Runtime {
     ) -> Result<HandleResponse, RmngError> {
         let started = Instant::now();
         if let Err(e) = self.validator.validate(intent) {
-            self.log_core(intent, "validate", "invalid", started, None, Some(e.to_string()));
+            self.log_core(
+                intent,
+                "validate",
+                "invalid",
+                started,
+                None,
+                Some(e.to_string()),
+                Some(AuditCategory::System),
+                None,
+            );
             return Ok(HandleResponse::failure(e.to_string()));
         }
 
         match self.gate.evaluate_core(intent) {
             PermissionVerdict::Deny(reason) => {
-                self.log_core(intent, "deny", "deny", started, None, Some(reason.clone()));
+                self.log_core(
+                    intent,
+                    "deny",
+                    "deny",
+                    started,
+                    None,
+                    Some(reason.clone()),
+                    Some(AuditCategory::System),
+                    None,
+                );
                 return Ok(HandleResponse::failure(reason));
             }
             PermissionVerdict::Allow => {}
@@ -169,7 +187,16 @@ impl Runtime {
 
         match intent {
             CoreIntent::PlanOnly { reasoning, .. } => {
-                self.log_core(intent, "plan.only", "ok", started, Some(AuditTrack::Plan), None);
+                self.log_core(
+                    intent,
+                    "plan.only",
+                    "ok",
+                    started,
+                    Some(AuditTrack::Plan),
+                    None,
+                    Some(AuditCategory::Plan),
+                    None,
+                );
                 Ok(HandleResponse::core_success(
                     "plan.only",
                     Some(ToolResult {
@@ -187,7 +214,16 @@ impl Runtime {
                 info!(tool = %target, "dispatching native tool (v2)");
                 let result = tools::dispatch(target, parameters).await?;
                 let outcome = if result.success { "ok" } else { "fail" };
-                self.log_core(intent, target, outcome, started, Some(AuditTrack::Native), None);
+                self.log_core(
+                    intent,
+                    target,
+                    outcome,
+                    started,
+                    Some(AuditTrack::Native),
+                    None,
+                    Some(AuditCategory::Native),
+                    None,
+                );
                 Ok(HandleResponse::core_success("tool.execute", Some(result)))
             }
             CoreIntent::McpProxy {
@@ -207,11 +243,44 @@ impl Runtime {
                     tool = %mcp_tool,
                     "dispatching mcp proxy"
                 );
-                let output = mcp_call_tool(&cfg.command, &cfg.args, mcp_tool, mcp_args)
-                    .await
-                    .map_err(|e| RmngError::ToolFailed(e.to_string()))?;
+                let global_iso = RmngConfig::load().isolation;
+                let limits = IsolationLimits::merge(&global_iso, cfg.isolation.as_ref());
+                let mcp_result = call_tool_isolated(
+                    &cfg.command,
+                    &cfg.args,
+                    mcp_tool,
+                    mcp_args,
+                    if limits.is_active() {
+                        Some(&limits)
+                    } else {
+                        None
+                    },
+                )
+                .await
+                .map_err(|e| RmngError::ToolFailed(e.to_string()))?;
+                let output = mcp_result.output;
                 let action = format!("mcp.proxy:{mcp_server}.{mcp_tool}");
-                self.log_core(intent, &action, "ok", started, Some(AuditTrack::Mcp), None);
+                let iso_detail = mcp_result
+                    .isolation
+                    .cgroup_path
+                    .as_ref()
+                    .map(|p| format!("cgroup={}", p.display()))
+                    .unwrap_or_else(|| "cgroup=none".into());
+                self.log_core(
+                    intent,
+                    &action,
+                    "ok",
+                    started,
+                    Some(AuditTrack::Mcp),
+                    Some(format!(
+                        "{mcp_server}.{mcp_tool} pid={:?} isolated={} {iso_detail} {}ms",
+                        mcp_result.pid,
+                        limits.is_active(),
+                        mcp_result.duration_ms
+                    )),
+                    Some(AuditCategory::Mcp),
+                    mcp_result.pid,
+                );
                 Ok(HandleResponse::core_success(
                     "mcp.proxy",
                     Some(ToolResult {
@@ -233,18 +302,11 @@ impl Runtime {
         track: Option<AuditTrack>,
         detail_override: Option<String>,
     ) {
-        let entry = AuditEntry {
-            timestamp: Utc::now(),
-            intent_id: intent.intent_id,
-            trace_id: None,
-            skill_name: None,
-            track,
-            duration_ms: Some(started.elapsed().as_millis() as u64),
-            mcp_server: None,
-            action: action.to_string(),
-            outcome: outcome.to_string(),
-            detail: detail_override.or_else(|| Some(intent.summary.clone())),
-        };
+        let mut entry = AuditEntry::new(action, outcome);
+        entry.intent_id = intent.intent_id;
+        entry.track = track;
+        entry.duration_ms = Some(started.elapsed().as_millis() as u64);
+        entry.detail = detail_override.or_else(|| Some(intent.summary.clone()));
         self.append_audit(&entry);
     }
 
@@ -256,6 +318,8 @@ impl Runtime {
         started: Instant,
         track: Option<AuditTrack>,
         detail_override: Option<String>,
+        category: Option<AuditCategory>,
+        mcp_pid: Option<u32>,
     ) {
         let meta = intent.metadata();
         let trace_id = meta.and_then(|m| m.trace_id.clone());
@@ -287,18 +351,25 @@ impl Runtime {
                 detail = Some(format!("session={sid}; {base}"));
             }
         }
-        let entry = AuditEntry {
-            timestamp: Utc::now(),
-            intent_id,
-            trace_id,
-            skill_name,
-            track,
-            duration_ms: Some(started.elapsed().as_millis() as u64),
-            mcp_server,
-            action: action.to_string(),
-            outcome: outcome.to_string(),
-            detail,
-        };
+        let session_id = meta.and_then(|m| m.session_id.clone());
+        let agent_id = meta.and_then(|m| m.handoff_from.clone());
+        let mut entry = AuditEntry::new(action, outcome);
+        entry.intent_id = intent_id;
+        entry.trace_id = trace_id;
+        entry.skill_name = skill_name;
+        entry.track = track;
+        entry.category = category.or_else(|| match track {
+            Some(AuditTrack::Mcp) => Some(AuditCategory::Mcp),
+            Some(AuditTrack::Native) => Some(AuditCategory::Native),
+            Some(AuditTrack::Plan) => Some(AuditCategory::Plan),
+            None => None,
+        });
+        entry.session_id = session_id;
+        entry.agent_id = agent_id;
+        entry.duration_ms = Some(started.elapsed().as_millis() as u64);
+        entry.mcp_server = mcp_server;
+        entry.mcp_pid = mcp_pid;
+        entry.detail = detail;
         self.append_audit(&entry);
     }
 

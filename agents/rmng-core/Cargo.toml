@@ -16,3 +16,4 @@ chrono.workspace = true
 tokio.workspace = true
 toml.workspace = true
 jsonschema.workspace = true
+sha2.workspace = true

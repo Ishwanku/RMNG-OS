@@ -1,4 +1,7 @@
-use rmng_core::{AuditEntry, AuditLog, AuditTrack, IntegrationRegistry, PermissionGate};
+use rmng_core::{
+    AuditCategory, AuditLog, AuditTrack, IntegrationRegistry, PermissionGate, RmngConfig,
+    AUDIT_SCHEMA_VERSION,
+};
 
 fn audit_track_label(t: AuditTrack) -> String {
     match t {
@@ -9,7 +12,6 @@ fn audit_track_label(t: AuditTrack) -> String {
 }
 use rmng_core::SessionStore;
 use rmng_nervous::{health_check_detailed, load_skill_index, AgentRegistry, NervousConnector};
-use std::io::{BufRead, BufReader};
 
 const AUDIT_TAIL: usize = 8;
 
@@ -37,6 +39,20 @@ pub async fn print_observe() {
             "llm fallback: global chain → {}",
             cfg.llm_fallback.join(" → ")
         );
+    }
+    let iso = &cfg.isolation;
+    if iso.is_active() {
+        println!(
+            "isolation:   mem={:?}MB cpu={:?}% pids={:?} cgroup={} session={} no_new_privs={}",
+            iso.memory_mb,
+            iso.cpu_percent,
+            iso.pids_max,
+            iso.cgroup,
+            iso.new_session,
+            iso.no_new_privs
+        );
+    } else {
+        println!("isolation:   disabled (set [isolation] in config.toml)");
     }
     println!();
 
@@ -196,32 +212,85 @@ pub async fn print_observe() {
     } else {
         for (name, cfg) in &allowlist.servers {
             let state = if cfg.enabled { "enabled" } else { "disabled" };
+            let iso = cfg
+                .isolation
+                .as_ref()
+                .filter(|i| i.is_active())
+                .map(|i| format!(" iso:mem={:?}MB", i.memory_mb))
+                .unwrap_or_default();
             println!(
-                "  {name} [{state}] {} — tools: {}",
+                "  {name} [{state}] {} — tools: {}{iso}",
                 cfg.command,
                 cfg.allowed_tools.join(", ")
             );
         }
     }
-    println!("  note: MCP children are spawned per request, not persistent");
+    println!("  note: MCP children are spawned per request with optional cgroup/rlimit isolation");
     println!();
 
-    let audit_path = AuditLog::default_path();
+    let cfg = RmngConfig::load();
+    let _ = cfg;
+
+    let audit_log = AuditLog::new(AuditLog::default_path());
+    let audit_path = audit_log.path();
+    println!("-- audit chain (schema v{AUDIT_SCHEMA_VERSION}) --");
+    match audit_log.verify_chain() {
+        Ok(v) => println!(
+            "  {} entries — {}",
+            v.entries,
+            if v.valid { "✓ chain valid" } else { "✗ TAMPER DETECTED" }
+        ),
+        Err(e) => println!("  verify error: {e}"),
+    }
+    println!();
+
     println!("-- recent audit ({}) --", audit_path.display());
-    match tail_audit(&audit_path, AUDIT_TAIL) {
+    match audit_log.tail(AUDIT_TAIL) {
         Ok(entries) if entries.is_empty() => println!("  (no entries)"),
         Ok(entries) => {
+            let mut llm_cost = 0.0f64;
+            let mut llm_calls = 0u32;
+            let mut mcp_spawns = 0u32;
+            for e in &entries {
+                if e.category == Some(AuditCategory::Llm) {
+                    llm_calls += 1;
+                    if let Some(c) = e.cost_usd {
+                        llm_cost += c;
+                    }
+                }
+                if e.category == Some(AuditCategory::Mcp) {
+                    mcp_spawns += 1;
+                }
+            }
+            if llm_calls > 0 || mcp_spawns > 0 {
+                println!(
+                    "  tail stats: llm_calls={llm_calls} est_cost=${llm_cost:.4} mcp_calls={mcp_spawns}"
+                );
+            }
             for e in entries {
                 let track = e
                     .track
                     .map(audit_track_label)
                     .unwrap_or_else(|| "-".into());
+                let cat = e
+                    .category
+                    .map(|c| c.as_str())
+                    .unwrap_or("-");
                 let dur = e
                     .duration_ms
                     .map(|d| format!("{d}ms"))
                     .unwrap_or_else(|| "-".into());
+                let seq = if e.seq > 0 {
+                    format!("#{}", e.seq)
+                } else {
+                    "-".into()
+                };
+                let cost = e
+                    .cost_usd
+                    .map(|c| format!(" ${c:.6}"))
+                    .unwrap_or_default();
                 println!(
-                    "  [{}] {} {} {track} {dur} — {}",
+                    "  [{seq}] [{}] {cat} {} {} {track} {dur}{cost} — {}",
                     e.timestamp.format("%H:%M:%S"),
                     e.outcome,
                     e.action,
@@ -233,14 +302,3 @@ pub async fn print_observe() {
     }
 }
 
-fn tail_audit(path: &std::path::Path, n: usize) -> std::io::Result<Vec<AuditEntry>> {
-    let file = std::fs::File::open(path)?;
-    let lines: Vec<String> = BufReader::new(file).lines().collect::<Result<_, _>>()?;
-    let tail: Vec<AuditEntry> = lines
-        .iter()
-        .rev()
-        .take(n)
-        .filter_map(|line| serde_json::from_str(line).ok())
-        .collect();
-    Ok(tail.into_iter().rev().collect())
-}

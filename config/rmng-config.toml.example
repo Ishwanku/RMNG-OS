@@ -58,6 +58,15 @@ model = "llama3.2"
 # Global LLM fallback chain (Sprint 8) — profile names tried in order after primary fails
 # llm_fallback = ["grok-frontier", "local-ollama"]
 
+# Subprocess isolation defaults for MCP tools (Sprint 10)
+[isolation]
+memory_mb = 512
+cpu_percent = 50
+pids_max = 64
+new_session = true
+cgroup = true
+no_new_privs = true
+
 [[profiles]]
 name = "groq-fast"
 llm_provider = "groq"

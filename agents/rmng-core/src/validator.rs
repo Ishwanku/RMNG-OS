@@ -1,4 +1,4 @@
-use crate::intent::CoreIntent;
+use crate::intent::{CoreIntent, CORE_INTENT_SCHEMA_VERSION};
 use crate::registry::IntegrationRegistry;
 use crate::RmngError;
 use jsonschema::Validator;
@@ -98,6 +98,13 @@ impl IntentValidator {
     }
 
     fn validate_value(&self, value: &Value) -> Result<(), RmngError> {
+        if let Some(ver) = value.get("schema_version").and_then(|v| v.as_str()) {
+            if ver != CORE_INTENT_SCHEMA_VERSION {
+                return Err(RmngError::InvalidIntent(format!(
+                    "unsupported core intent schema_version '{ver}' (expected {CORE_INTENT_SCHEMA_VERSION})"
+                )));
+            }
+        }
         let messages: Vec<String> = self
             .core_schema
             .iter_errors(value)

@@ -34,3 +34,8 @@ enabled = true
 command = "uvx"
 args = ["mcp-server-git", "--repository", "/path/to/RMNG-OS"]
 allowed_tools = ["git.log"]
+
+# Per-server isolation override (optional — merges over global [isolation] in config.toml)
+# [servers.git.isolation]
+# memory_mb = 256
+# cgroup = true

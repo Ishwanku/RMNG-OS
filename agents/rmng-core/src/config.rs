@@ -1,3 +1,4 @@
+use rmng_mcp::IsolationLimits;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -85,16 +86,13 @@ impl LlmConfig {
 
 /// Parse provider id from CLI/config strings (`grok`, `google`, …).
 pub fn parse_provider_str(s: &str) -> Result<LlmProviderKind, String> {
-    let wrapped = format!(r#"llm_provider = "{s}""#);
-    #[derive(Deserialize)]
-    struct Wrap {
-        llm_provider: LlmProviderKind,
-    }
-    let raw = format!("[llm]\n{wrapped}");
+    let raw = format!("[llm]
+llm_provider = \"{}\"", s);
     toml::from_str::<RmngConfig>(&raw)
         .map(|c| c.llm.llm_provider)
-        .map_err(|e| format!("unknown provider '{s}': {e}"))
+        .map_err(|e| format!("unknown provider '{}': {}", s, e))
 }
+
 
 /// Named LLM preset — switch with `[llm] profile = "name"` or `rmng llm use <name>`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -173,6 +171,9 @@ pub struct RmngConfig {
     /// Global fallback profile names (Sprint 8) — tried in order when primary LLM fails.
     #[serde(default)]
     pub llm_fallback: Vec<String>,
+    /// Default subprocess isolation for MCP tools (Sprint 10).
+    #[serde(default)]
+    pub isolation: IsolationLimits,
 }
 
 impl RmngConfig {
