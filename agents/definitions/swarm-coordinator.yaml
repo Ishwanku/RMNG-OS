@@ -1,0 +1,14 @@
+id: swarm-coordinator
+layer: L4
+description: >-
+  High-level orchestrator — decomposes tasks and delegates to L3/L2/L1
+  specialists. Emits plan.only or hands off execution; never runs tools directly.
+skills:
+  - phase-gates
+allowed_native_tools: []
+allowed_mcp_tools: []
+delegates_to:
+  - repo-keeper
+  - kernel-engineer
+  - system-health
+  - runtime-executor

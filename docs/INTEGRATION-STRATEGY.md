@@ -148,3 +148,28 @@ RMNG-OS/
 4. Never batch-allowlist tools without per-tool review
 
 See also: [PLAN-AGENTS-MCP-SKILLS.md](PLAN-AGENTS-MCP-SKILLS.md) · [DECISIONS.md](DECISIONS.md) · [daily-workflow.md](daily-workflow.md)
+
+---
+
+## 5. Multi-Level Agent Layers (ADR-017)
+
+External repos and new RMNG agents must declare which **layer** they target:
+
+| Layer | When to use | Integration path |
+|-------|-------------|------------------|
+| **L1** | Kernel, hardware, device ops | Native Core only — high review bar |
+| **L2** | Execution/runtime extensions | Native + MCP manifests |
+| **L3** | Domain workflows (default for new agents) | Skills + agent YAML + optional native/MCP |
+| **L4** | Orchestration patterns | Skills + agent YAML — **no new native tools** |
+
+### Adding agents by layer
+
+| Layer | Steps |
+|-------|-------|
+| **L3/L4** | `agents/definitions/<name>.yaml` + optional `skills/<name>/` — **no Rust changes** |
+| **L2/L1** | Above + `integrations/` manifest + handler if new tools needed |
+
+### Session-aware workflows
+
+Multi-agent handoffs persist to `~/.rmng/sessions/`. Orchestrators (L4) record delegation history before lower layers emit `CoreIntent` to `rmngd`.
+

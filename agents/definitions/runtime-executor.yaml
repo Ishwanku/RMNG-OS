@@ -1,0 +1,14 @@
+id: runtime-executor
+layer: L2
+description: >-
+  Runtime execution plane agent — dispatches allowlisted native tools and MCP
+  proxies through rmngd. Used when orchestrators delegate execution work.
+skills: []
+allowed_native_tools:
+  - git.status
+  - git.diff
+  - github.pr_status
+  - kernel.status
+allowed_mcp_tools:
+  - git:git.log
+delegates_to: []

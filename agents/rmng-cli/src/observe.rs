@@ -7,6 +7,7 @@ fn audit_track_label(t: AuditTrack) -> String {
         AuditTrack::Plan => "plan".into(),
     }
 }
+use rmng_core::SessionStore;
 use rmng_nervous::{load_skill_index, AgentRegistry};
 use std::io::{BufRead, BufReader};
 
@@ -54,12 +55,13 @@ pub fn print_observe() {
 
     match AgentRegistry::load() {
         Ok(agents) => {
-            println!("-- agents --");
+            println!("-- agents (multi-level) --");
             for id in agents.agent_ids() {
                 if let Ok(a) = agents.get(&id) {
                     println!(
-                        "  {} — {} native, {} mcp, skills: {}",
+                        "  {} [{}] — {} native, {} mcp, skills: {}",
                         a.id,
+                        a.layer,
                         a.allowed_native_tools.len(),
                         a.allowed_mcp_tools.len(),
                         a.skills.join(", ")
@@ -69,6 +71,27 @@ pub fn print_observe() {
         }
         Err(e) => println!("agents: ERROR — {e}"),
     }
+    println!();
+
+    let session_store = SessionStore::default_store();
+    match session_store.list_ids() {
+        Ok(ids) => {
+            println!("-- sessions store ({}) --", session_store.root().display());
+            println!("  {} session(s)", ids.len());
+            for id in ids.iter().take(5) {
+                if let Ok(s) = session_store.load(id) {
+                    println!(
+                        "  {} — handoffs: {}, active layers: {}",
+                        id,
+                        s.handoff_history.len(),
+                        s.active_agents.len()
+                    );
+                }
+            }
+        }
+        Err(e) => println!("sessions: ERROR — {e}"),
+    }
+
     println!();
 
     match load_skill_index() {

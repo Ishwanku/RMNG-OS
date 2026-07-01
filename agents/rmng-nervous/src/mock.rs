@@ -21,6 +21,35 @@ pub fn mock_core_intent(
 
     // Agent-scoped routing hints
     if let Some(a) = agent {
+        if a.id == "swarm-coordinator" {
+            if lower.contains("git") || lower.contains("repo") || lower.contains("status") {
+                return CoreIntent::ToolExecute {
+                    target: "git.status".into(),
+                    parameters: serde_json::json!({}),
+                    metadata,
+                };
+            }
+            if lower.contains("kernel") || lower.contains("health") || lower.contains("build") {
+                return CoreIntent::ToolExecute {
+                    target: "kernel.status".into(),
+                    parameters: serde_json::json!({}),
+                    metadata,
+                };
+            }
+            return CoreIntent::PlanOnly {
+                reasoning: format!(
+                    "Orchestrator plan for: {prompt}. Delegate to specialists via handoff."
+                ),
+                metadata,
+            };
+        }
+        if a.id == "system-health" {
+            return CoreIntent::ToolExecute {
+                target: "kernel.status".into(),
+                parameters: serde_json::json!({}),
+                metadata,
+            };
+        }
         if a.id == "repo-keeper" {
             if lower.contains("diff") || lower.contains("changes") {
                 return CoreIntent::ToolExecute {

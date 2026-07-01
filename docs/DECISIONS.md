@@ -288,6 +288,12 @@ Top GitHub OSS ecosystems (MCP, agent skills, orchestration frameworks) offer th
 
 ---
 
+## ADR-017: Multi-level agent architecture (L1–L4)
+
+**Status:** Accepted · **Date:** 2026-07-01
+
+Four-layer agent model with downward-only handoffs, session store at ~/.rmng/sessions/, and layer-aware router. Full record: [ADR-017](decisions/ADR-017-multi-level-agent-architecture.md).
+
 ## ADR-015: Intent schema decoupling — poly-intent core envelope
 
 **Date:** 2026-06-30  

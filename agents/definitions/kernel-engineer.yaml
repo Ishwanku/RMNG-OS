@@ -1,4 +1,5 @@
 id: kernel-engineer
+layer: L1
 description: >-
   Kernel lab specialist — patches, configs, out-of-tree builds, and RMNG
   kernel identity workflows. Does not touch git or GitHub operations.
@@ -10,3 +11,4 @@ allowed_native_tools:
   - kernel.build
   - kernel.apply_patches
 allowed_mcp_tools: []
+delegates_to: []

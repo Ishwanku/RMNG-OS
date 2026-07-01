@@ -2,10 +2,11 @@ mod observe;
 
 use clap::{Parser, Subcommand};
 use rmng_core::{
-    daemon_running, parse_incoming, send_intent_json, CoreIntent, HandleResponse, Intent,
-    PermissionGate, PermissionVerdict, RmngConfig, Runtime, socket_path,
+    daemon_running, parse_incoming, send_intent_json, CoreIntent, HandleResponse, IncomingIntent,
+    Intent, PermissionGate, PermissionVerdict, RmngConfig, Runtime, SessionStore, socket_path,
+    IntentValidator, IntegrationRegistry,
 };
-use rmng_nervous::{load_skill, load_skill_index, AgentRouter, NervousConnector};
+use rmng_nervous::{load_skill, load_skill_index, AgentRouter, NervousConnector, RouteOutcome};
 
 #[derive(Parser)]
 #[command(name = "rmng", about = "RMNG-OS CLI", version)]
@@ -16,7 +17,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Parse and validate a JSON intent file (permission check only)
+    /// Parse and validate a JSON intent file (v1 or v2 CoreIntent)
     Intent {
         #[arg(short, long)]
         file: String,
@@ -38,8 +39,15 @@ enum Commands {
         skill: Option<String>,
         #[arg(short = 'a', long = "agent", help = "Route via agents/definitions/<name>.yaml")]
         agent: Option<String>,
+        #[arg(long, help = "Session id for multi-agent handoff persistence")]
+        session: Option<String>,
         #[arg(long, help = "Produce intent only; do not dispatch to rmngd")]
         dry_run: bool,
+    },
+    /// Multi-agent session management
+    Session {
+        #[command(subcommand)]
+        action: SessionCommands,
     },
     /// List allowed tools
     Tools,
@@ -49,7 +57,16 @@ enum Commands {
     Observe,
 }
 
-/// Dispatch v2 intent to rmngd only — CLI never executes tools locally.
+#[derive(Subcommand)]
+enum SessionCommands {
+    /// Create a new session
+    New,
+    /// List session ids
+    List,
+    /// Show session details
+    Show { id: String },
+}
+
 async fn dispatch_core_intent(intent: &CoreIntent, dry_run: bool) -> i32 {
     println!(
         "Intent: {}",
@@ -132,6 +149,55 @@ async fn execute_intent(intent: &Intent, prefer_daemon: bool) -> i32 {
     }
 }
 
+fn evaluate_intent_file(json: &str) -> i32 {
+    let gate = PermissionGate::default();
+    match parse_incoming(json) {
+        Ok(IncomingIntent::Core(intent)) => {
+            let validator = match IntegrationRegistry::load() {
+                Ok(reg) => IntentValidator::new(reg).ok(),
+                Err(_) => None,
+            };
+            if let Some(v) = &validator {
+                if let Err(e) = v.validate(&intent) {
+                    eprintln!("INVALID: {e}");
+                    return 1;
+                }
+            }
+            match gate.evaluate_core(&intent) {
+                PermissionVerdict::Allow => {
+                    let action = match &intent {
+                        CoreIntent::ToolExecute { target, .. } => format!("tool.execute:{target}"),
+                        CoreIntent::McpProxy { mcp_server, mcp_tool, .. } => {
+                            format!("mcp.proxy:{mcp_server}.{mcp_tool}")
+                        }
+                        CoreIntent::PlanOnly { .. } => "plan.only".into(),
+                    };
+                    println!("OK: {action} (v2 CoreIntent)");
+                    0
+                }
+                PermissionVerdict::Deny(reason) => {
+                    eprintln!("DENIED: {reason}");
+                    1
+                }
+            }
+        }
+        Ok(IncomingIntent::V1(intent)) => match gate.evaluate(&intent) {
+            PermissionVerdict::Allow => {
+                println!("OK: {:?} (v1)", intent.kind);
+                0
+            }
+            PermissionVerdict::Deny(reason) => {
+                eprintln!("DENIED: {reason}");
+                1
+            }
+        },
+        Err(e) => {
+            eprintln!("INVALID: {e}");
+            1
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -142,23 +208,15 @@ async fn main() {
     let code = match cli.command {
         Commands::Intent { file } => {
             let json = std::fs::read_to_string(&file).expect("read intent file");
-            let intent = Intent::parse(&json).expect("valid intent");
-            let gate = PermissionGate::default();
-            match gate.evaluate(&intent) {
-                PermissionVerdict::Allow => {
-                    println!("OK: {:?}", intent.kind);
-                    0
-                }
-                PermissionVerdict::Deny(reason) => {
-                    eprintln!("DENIED: {reason}");
-                    1
-                }
-            }
+            evaluate_intent_file(&json)
         }
         Commands::Run { file } => {
             let json = std::fs::read_to_string(&file).expect("read intent file");
-            let intent = Intent::parse(&json).expect("valid intent");
-            execute_intent(&intent, false).await
+            let incoming = parse_incoming(&json).expect("valid intent");
+            match incoming {
+                IncomingIntent::V1(intent) => execute_intent(&intent, false).await,
+                IncomingIntent::Core(intent) => dispatch_core_intent(&intent, false).await,
+            }
         }
         Commands::Send { file } => {
             if !daemon_running() {
@@ -171,10 +229,10 @@ async fn main() {
                 let json = std::fs::read_to_string(&file).expect("read intent file");
                 let incoming = parse_incoming(&json).expect("valid intent");
                 let compact = match &incoming {
-                    rmng_core::IncomingIntent::V1(intent) => {
+                    IncomingIntent::V1(intent) => {
                         serde_json::to_string(intent).expect("serialize intent")
                     }
-                    rmng_core::IncomingIntent::Core(intent) => {
+                    IncomingIntent::Core(intent) => {
                         serde_json::to_string(intent).expect("serialize core intent")
                     }
                 };
@@ -195,6 +253,7 @@ async fn main() {
             prompt,
             skill,
             agent,
+            session,
             dry_run,
         } => {
             if agent.is_some() && skill.is_some() {
@@ -204,8 +263,28 @@ async fn main() {
 
             if let Some(agent_id) = agent {
                 let router = AgentRouter::load();
-                match router.ask(&agent_id, &prompt).await {
-                    Ok(intent) => dispatch_core_intent(&intent, dry_run).await,
+                match router
+                    .ask_routed(session.as_deref(), &agent_id, &prompt)
+                    .await
+                {
+                    Ok(outcome) => {
+                        if outcome.is_handoff() {
+                            if let RouteOutcome::Handoff {
+                                from_agent,
+                                to_agent,
+                                from_layer,
+                                to_layer,
+                                reason,
+                                ..
+                            } = &outcome
+                            {
+                                println!(
+                                    "handoff: {from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {reason}"
+                                );
+                            }
+                        }
+                        dispatch_core_intent(&outcome.intent(), dry_run).await
+                    }
                     Err(e) => {
                         eprintln!("agent router: {e}");
                         1
@@ -235,8 +314,59 @@ async fn main() {
                 }
             }
         }
+        Commands::Session { action } => match action {
+            SessionCommands::New => {
+                let store = SessionStore::default_store();
+                match store.create() {
+                    Ok(session) => {
+                        println!("session: {}", session.id);
+                        println!("path: {}/{}.json", store.root().display(), session.id);
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                        1
+                    }
+                }
+            }
+            SessionCommands::List => {
+                let store = SessionStore::default_store();
+                match store.list_ids() {
+                    Ok(ids) => {
+                        if ids.is_empty() {
+                            println!("(no sessions)");
+                        } else {
+                            for id in ids {
+                                println!("{id}");
+                            }
+                        }
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                        1
+                    }
+                }
+            }
+            SessionCommands::Show { id } => {
+                let store = SessionStore::default_store();
+                match store.load(&id) {
+                    Ok(session) => {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&session).expect("serialize session")
+                        );
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                        1
+                    }
+                }
+            }
+        },
         Commands::Tools => {
-            match rmng_core::IntegrationRegistry::load() {
+            match IntegrationRegistry::load() {
                 Ok(reg) => {
                     for t in reg.allowed_tool_names() {
                         let handler = if rmng_core::tools::registered_tools().contains(&t.as_str()) {
@@ -259,8 +389,8 @@ async fn main() {
         Commands::Status => {
             let cfg = RmngConfig::load();
             let connector = NervousConnector::from_config(cfg);
-            println!("rmng 0.1.0 — Sprint 2 (agents + router + observe)");
-            if let Ok(reg) = rmng_core::IntegrationRegistry::load() {
+            println!("rmng 0.1.0 — Sprint 3 (multi-level agents + sessions)");
+            if let Ok(reg) = IntegrationRegistry::load() {
                 println!(
                     "integrations: {} manifests, {} tools",
                     reg.manifests().len(),
@@ -271,7 +401,11 @@ async fn main() {
                 println!("skills index: {} (progressive disclosure)", index.len());
             }
             if let Ok(agents) = rmng_nervous::AgentRegistry::load() {
-                println!("agents: {}", agents.agent_ids().len());
+                println!("agents: {} (L1–L4)", agents.agent_ids().len());
+            }
+            let store = SessionStore::default_store();
+            if let Ok(ids) = store.list_ids() {
+                println!("sessions: {}", ids.len());
             }
             println!("runtime: rmng-core");
             println!("nervous: {} ({})", connector.provider_label(), RmngConfig::config_path().display());

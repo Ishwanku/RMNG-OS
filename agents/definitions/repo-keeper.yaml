@@ -1,4 +1,5 @@
 id: repo-keeper
+layer: L3
 description: >-
   Repository and GitHub hygiene specialist — git status, diffs, PR context,
   and safe commits within RMNG-OS. Does not run kernel builds.
@@ -11,3 +12,4 @@ allowed_native_tools:
   - github.pr_status
 allowed_mcp_tools:
   - git:git.log
+delegates_to: []

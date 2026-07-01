@@ -98,7 +98,7 @@ Goal: Make the kernel build distinctly "RMNG" without forking the entire tree.
 
 ---
 
-## Phase 5 — AI Agent Foundation (CURRENT — decisions locked, implementation next)
+## Phase 5 — AI Agent Foundation ✅ COMPLETE
 
 Goal: Implement Rust runtime with nervous-system / body separation. See [VISION.md](VISION.md), [ADR-009–012](DECISIONS.md).
 
@@ -133,9 +133,18 @@ Goal: Implement Rust runtime with nervous-system / body separation. See [VISION.
 | Cloud & infra | Medium |
 | Creative & business | Later |
 
-## Phase 7 — Agent Orchestration
+## Phase 7 — Agent Orchestration (IN PROGRESS)
 
-Multi-agent routing, shared memory, permissions, UI/CLI shell.
+Multi-agent routing, layer model, session store, swarm handoffs.
+
+| Sprint | Status | Deliverables |
+|--------|--------|--------------|
+| **Sprint 1** | ✅ | IntegrationRegistry, IntentValidator, Audit v2, MCP lifecycle |
+| **Sprint 2** | ✅ | Agent definitions, router, `rmng ask --agent`, `rmng observe`, progressive skills |
+| **Sprint 3** | ✅ | L1–L4 layer model, session store, layer-aware router, ADR-017 |
+| **Sprint 4** | Planned | Controlled repo ingestion, swarm expansion, daemon integration tests |
+
+See [ADR-017](decisions/ADR-017-multi-level-agent-architecture.md).
 
 ---
 

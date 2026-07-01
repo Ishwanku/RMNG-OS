@@ -1,0 +1,11 @@
+id: system-health
+layer: L1
+description: >-
+  Low-level system health agent — kernel environment status and build-plane
+  diagnostics. Minimal surface area; high privilege for kernel.status only.
+skills:
+  - kernel-build
+allowed_native_tools:
+  - kernel.status
+allowed_mcp_tools: []
+delegates_to: []

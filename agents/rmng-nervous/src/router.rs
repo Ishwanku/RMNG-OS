@@ -1,6 +1,8 @@
 use crate::agent::{AgentDefinition, AgentError, AgentRegistry};
+use crate::layer::AgentLayer;
 use crate::skill::{load_skills_for_agent, AgentSkill, SkillError};
 use crate::{ConnectorError, NervousConnector};
+use rmng_core::session::{SessionStore};
 use rmng_core::CoreIntent;
 
 /// Resolved routing context for an agent invocation.
@@ -9,6 +11,23 @@ pub struct AgentRoute {
     pub agent: AgentDefinition,
     pub skills: Vec<AgentSkill>,
     pub skill_names: Vec<String>,
+}
+
+/// Result of layer-aware routing — direct intent or delegated handoff.
+#[derive(Debug, Clone)]
+pub enum RouteOutcome {
+    Direct {
+        agent_id: String,
+        intent: CoreIntent,
+    },
+    Handoff {
+        from_agent: String,
+        to_agent: String,
+        from_layer: AgentLayer,
+        to_layer: AgentLayer,
+        intent: CoreIntent,
+        reason: String,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -21,11 +40,16 @@ pub enum RouterError {
     Connector(#[from] ConnectorError),
     #[error("agent policy denied: {0}")]
     PolicyDenied(String),
+    #[error("session error: {0}")]
+    Session(String),
+    #[error("orchestration requires L4 agent, got {0}")]
+    NotOrchestrator(String),
 }
 
 pub struct AgentRouter {
     registry: AgentRegistry,
     connector: NervousConnector,
+    sessions: SessionStore,
 }
 
 impl AgentRouter {
@@ -36,6 +60,7 @@ impl AgentRouter {
                 AgentRegistry::load_from(std::path::Path::new("/nonexistent")).unwrap()
             }),
             connector: NervousConnector::load(),
+            sessions: SessionStore::default_store(),
         }
     }
 
@@ -43,11 +68,16 @@ impl AgentRouter {
         Self {
             registry,
             connector,
+            sessions: SessionStore::default_store(),
         }
     }
 
     pub fn registry(&self) -> &AgentRegistry {
         &self.registry
+    }
+
+    pub fn sessions(&self) -> &SessionStore {
+        &self.sessions
     }
 
     pub fn resolve(&self, agent_id: &str) -> Result<AgentRoute, RouterError> {
@@ -66,24 +96,189 @@ impl AgentRouter {
 
     /// Nervous reasoning + agent policy gate (before rmngd IPC).
     pub async fn ask(&self, agent_id: &str, prompt: &str) -> Result<CoreIntent, RouterError> {
+        let outcome = self.ask_routed(None, agent_id, prompt).await?;
+        Ok(outcome.intent())
+    }
+
+    /// Layer-aware ask with optional session persistence.
+    pub async fn ask_routed(
+        &self,
+        session_id: Option<&str>,
+        agent_id: &str,
+        prompt: &str,
+    ) -> Result<RouteOutcome, RouterError> {
         let route = self.resolve(agent_id)?;
-        let primary_skill = route.skill_names.first().map(|s| s.as_str());
-        let primary_skill_body = route.skills.first();
+        if route.agent.layer == AgentLayer::L4 {
+            return self
+                .orchestrate(session_id, &route, prompt)
+                .await;
+        }
+        let intent = self.reason_for_route(&route, prompt).await?;
+        route.agent.allows_core_intent(&intent).map_err(RouterError::PolicyDenied)?;
+        if let Some(sid) = session_id {
+            self.touch_session(sid, &route.agent, prompt)?;
+        }
+        Ok(RouteOutcome::Direct {
+            agent_id: agent_id.to_string(),
+            intent,
+        })
+    }
 
-        let intent = self
-            .connector
-            .reason_core_with_agent(prompt, Some(&route.agent), primary_skill, primary_skill_body, &route.skills)
-            .await?;
+    /// Explicit handoff from one agent to another within a session.
+    pub async fn handoff(
+        &self,
+        session_id: &str,
+        from_id: &str,
+        to_id: &str,
+        prompt: &str,
+        reason: &str,
+    ) -> Result<RouteOutcome, RouterError> {
+        let from = self.registry.get(from_id)?.clone();
+        let to = self.registry.get(to_id)?.clone();
+        from.validate_handoff_to(&to)?;
+        let route = self.resolve(to_id)?;
+        let intent = self.reason_for_route(&route, prompt).await?;
+        to.allows_core_intent(&intent).map_err(RouterError::PolicyDenied)?;
 
-        route
-            .agent
+        let mut session = self
+            .sessions
+            .load(session_id)
+            .map_err(|e| RouterError::Session(e.to_string()))?;
+        self.sessions
+            .record_handoff(
+                &mut session,
+                from_id,
+                from.layer.as_str(),
+                to_id,
+                to.layer.as_str(),
+                reason,
+                Some(prompt),
+            )
+            .map_err(|e| RouterError::Session(e.to_string()))?;
+        self.sessions
+            .set_active_agent(&mut session, to.layer.as_str(), to_id, to.layer.as_str())
+            .map_err(|e| RouterError::Session(e.to_string()))?;
+
+        Ok(RouteOutcome::Handoff {
+            from_agent: from_id.to_string(),
+            to_agent: to_id.to_string(),
+            from_layer: from.layer,
+            to_layer: to.layer,
+            intent,
+            reason: reason.to_string(),
+        })
+    }
+
+    async fn orchestrate(
+        &self,
+        session_id: Option<&str>,
+        route: &AgentRoute,
+        prompt: &str,
+    ) -> Result<RouteOutcome, RouterError> {
+        let orchestrator = &route.agent;
+        let plan = self.reason_for_route(route, prompt).await?;
+
+        let (delegate_hint, reason) = match &plan {
+            CoreIntent::ToolExecute { target, .. } => (target.clone(), format!("execute {target}")),
+            CoreIntent::McpProxy { mcp_server, mcp_tool, .. } => (
+                format!("{mcp_server}:{mcp_tool}"),
+                format!("mcp {mcp_server}.{mcp_tool}"),
+            ),
+            CoreIntent::PlanOnly { reasoning: _, .. } => {
+                if let Some(sid) = session_id {
+                    self.touch_session(sid, orchestrator, prompt)?;
+                }
+                return Ok(RouteOutcome::Direct {
+                    agent_id: orchestrator.id.clone(),
+                    intent: plan,
+                });
+            }
+        };
+
+        let delegate = self.registry.resolve_handoff_target(orchestrator, &delegate_hint)?;
+        let delegate_route = self.resolve(&delegate.id)?;
+        let intent = self.reason_for_route(&delegate_route, prompt).await?;
+        delegate
             .allows_core_intent(&intent)
             .map_err(RouterError::PolicyDenied)?;
 
-        Ok(intent)
+        if let Some(sid) = session_id {
+            let mut session = self
+                .sessions
+                .load(sid)
+                .map_err(|e| RouterError::Session(e.to_string()))?;
+            self.sessions
+                .record_handoff(
+                    &mut session,
+                    &orchestrator.id,
+                    orchestrator.layer.as_str(),
+                    &delegate.id,
+                    delegate.layer.as_str(),
+                    &reason,
+                    Some(prompt),
+                )
+                .map_err(|e| RouterError::Session(e.to_string()))?;
+            self.sessions
+                .set_active_agent(
+                    &mut session,
+                    delegate.layer.as_str(),
+                    &delegate.id,
+                    delegate.layer.as_str(),
+                )
+                .map_err(|e| RouterError::Session(e.to_string()))?;
+        }
+
+        Ok(RouteOutcome::Handoff {
+            from_agent: orchestrator.id.clone(),
+            to_agent: delegate.id.clone(),
+            from_layer: orchestrator.layer,
+            to_layer: delegate.layer,
+            intent,
+            reason,
+        })
     }
 
-    /// Validate an intent against agent policy (for testing / dry-run).
+    async fn reason_for_route(
+        &self,
+        route: &AgentRoute,
+        prompt: &str,
+    ) -> Result<CoreIntent, RouterError> {
+        let primary_skill = route.skill_names.first().map(|s| s.as_str());
+        let primary_skill_body = route.skills.first();
+        Ok(self
+            .connector
+            .reason_core_with_agent(
+                prompt,
+                Some(&route.agent),
+                primary_skill,
+                primary_skill_body,
+                &route.skills,
+            )
+            .await?)
+    }
+
+    fn touch_session(
+        &self,
+        session_id: &str,
+        agent: &AgentDefinition,
+        prompt: &str,
+    ) -> Result<(), RouterError> {
+        let mut session = self
+            .sessions
+            .load(session_id)
+            .map_err(|e| RouterError::Session(e.to_string()))?;
+        session.task_state.current_prompt = Some(prompt.to_string());
+        self.sessions
+            .set_active_agent(
+                &mut session,
+                agent.layer.as_str(),
+                &agent.id,
+                agent.layer.as_str(),
+            )
+            .map_err(|e| RouterError::Session(e.to_string()))?;
+        Ok(())
+    }
+
     pub fn validate_intent(agent: &AgentDefinition, intent: &CoreIntent) -> Result<(), RouterError> {
         agent
             .allows_core_intent(intent)
@@ -91,10 +286,21 @@ impl AgentRouter {
     }
 }
 
+impl RouteOutcome {
+    pub fn intent(&self) -> CoreIntent {
+        match self {
+            Self::Direct { intent, .. } | Self::Handoff { intent, .. } => intent.clone(),
+        }
+    }
+
+    pub fn is_handoff(&self) -> bool {
+        matches!(self, Self::Handoff { .. })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmng_core::CoreIntent;
     use std::path::PathBuf;
 
     fn repo_keeper() -> AgentDefinition {

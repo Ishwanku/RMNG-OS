@@ -1,3 +1,5 @@
+use crate::layer::{AgentLayer, LayerAgent};
+use rmng_core::CoreIntent;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -7,12 +9,22 @@ use std::path::{Path, PathBuf};
 pub struct AgentDefinition {
     pub id: String,
     pub description: String,
+    /// Multi-level layer (ADR-017). Defaults to L3 for backward compatibility.
+    #[serde(default = "default_layer")]
+    pub layer: AgentLayer,
     #[serde(default)]
     pub skills: Vec<String>,
     #[serde(default)]
     pub allowed_native_tools: Vec<String>,
     #[serde(default)]
     pub allowed_mcp_tools: Vec<String>,
+    /// Explicit handoff targets (agent ids). Wildcards not supported here.
+    #[serde(default)]
+    pub delegates_to: Vec<String>,
+}
+
+fn default_layer() -> AgentLayer {
+    AgentLayer::L3
 }
 
 /// Loaded set of agent definitions from `agents/definitions/`.
@@ -30,6 +42,8 @@ pub enum AgentError {
     Io(#[from] std::io::Error),
     #[error("parse agent definition: {0}")]
     Parse(String),
+    #[error("handoff not permitted: {0}")]
+    HandoffDenied(String),
 }
 
 impl AgentRegistry {
@@ -42,10 +56,7 @@ impl AgentRegistry {
         let mut agents = HashMap::new();
 
         if !root.is_dir() {
-            tracing::warn!(
-                path = %root.display(),
-                "agent definitions directory missing"
-            );
+            tracing::warn!(path = %root.display(), "agent definitions directory missing");
             return Ok(Self { root, agents });
         }
 
@@ -84,18 +95,77 @@ impl AgentRegistry {
         ids
     }
 
+    pub fn by_layer(&self, layer: AgentLayer) -> Vec<&AgentDefinition> {
+        let mut out: Vec<&AgentDefinition> = self
+            .agents
+            .values()
+            .filter(|a| a.layer == layer)
+            .collect();
+        out.sort_by(|a, b| a.id.cmp(&b.id));
+        out
+    }
+
+    /// Find the best delegate agent for a native tool (lowest layer that allows it).
+    pub fn find_delegate_for_tool(&self, tool: &str) -> Option<&AgentDefinition> {
+        let mut candidates: Vec<&AgentDefinition> = self
+            .agents
+            .values()
+            .filter(|a| a.allows_native_tool(tool))
+            .collect();
+        candidates.sort_by_key(|a| std::cmp::Reverse(a.layer.numeric()));
+        candidates.first().copied()
+    }
+
+    /// Resolve explicit or implicit handoff target for an orchestrator.
+    pub fn resolve_handoff_target(
+        &self,
+        from: &AgentDefinition,
+        hint: &str,
+    ) -> Result<&AgentDefinition, AgentError> {
+        if let Ok(agent) = self.get(hint) {
+            from.validate_handoff_to(agent)?;
+            return Ok(agent);
+        }
+        if hint.contains('.') {
+            if let Some(agent) = self.find_delegate_for_tool(hint) {
+                from.validate_handoff_to(agent)?;
+                return Ok(agent);
+            }
+        }
+        for id in &from.delegates_to {
+            if let Ok(agent) = self.get(id) {
+                if hint.is_empty() || agent.id.contains(hint) || hint.contains(&agent.id) {
+                    from.validate_handoff_to(agent)?;
+                    return Ok(agent);
+                }
+            }
+        }
+        Err(AgentError::HandoffDenied(format!(
+            "no delegate from '{}' for hint '{}'",
+            from.id, hint
+        )))
+    }
+
     pub fn definitions_root(&self) -> &Path {
         &self.root
     }
 }
 
+impl LayerAgent for AgentDefinition {
+    fn layer(&self) -> AgentLayer {
+        self.layer
+    }
+
+    fn can_handoff_to(&self, target: &dyn LayerAgent) -> bool {
+        self.layer.can_delegate_to(target.layer())
+    }
+}
+
 impl AgentDefinition {
-    /// Whether a native tool name is permitted (supports `prefix.*` wildcards).
     pub fn allows_native_tool(&self, tool: &str) -> bool {
         pattern_matches_any(tool, &self.allowed_native_tools)
     }
 
-    /// Whether an MCP proxy is permitted. Entries use `server:tool` or `server:*` format.
     pub fn allows_mcp_tool(&self, server: &str, tool: &str) -> bool {
         let key = format!("{server}:{tool}");
         self.allowed_mcp_tools.iter().any(|p| {
@@ -109,8 +179,7 @@ impl AgentDefinition {
         })
     }
 
-    pub fn allows_core_intent(&self, intent: &rmng_core::CoreIntent) -> Result<(), String> {
-        use rmng_core::CoreIntent;
+    pub fn allows_core_intent(&self, intent: &CoreIntent) -> Result<(), String> {
         match intent {
             CoreIntent::PlanOnly { .. } => Ok(()),
             CoreIntent::ToolExecute { target, .. } => {
@@ -138,6 +207,25 @@ impl AgentDefinition {
                 }
             }
         }
+    }
+
+    pub fn validate_handoff_to(&self, target: &AgentDefinition) -> Result<(), AgentError> {
+        if !self.can_handoff_to(target) {
+            return Err(AgentError::HandoffDenied(format!(
+                "{} ({}) cannot hand off to {} ({})",
+                self.id,
+                self.layer,
+                target.id,
+                target.layer
+            )));
+        }
+        if !self.delegates_to.is_empty() && !self.delegates_to.iter().any(|d| d == &target.id) {
+            return Err(AgentError::HandoffDenied(format!(
+                "{} is not listed in {} delegates_to",
+                target.id, self.id
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -184,32 +272,36 @@ mod tests {
     }
 
     #[test]
-    fn loads_kernel_and_repo_agents() {
+    fn loads_all_layer_agents() {
         let reg = fixture_registry();
         assert!(reg.get("kernel-engineer").is_ok());
         assert!(reg.get("repo-keeper").is_ok());
+        assert!(reg.get("system-health").is_ok());
+        assert!(reg.get("swarm-coordinator").is_ok());
     }
 
     #[test]
-    fn kernel_engineer_denies_git_tools() {
+    fn kernel_engineer_is_l1() {
         let reg = fixture_registry();
         let agent = reg.get("kernel-engineer").unwrap();
+        assert_eq!(agent.layer, AgentLayer::L1);
         assert!(agent.allows_native_tool("kernel.status"));
         assert!(!agent.allows_native_tool("git.status"));
     }
 
     #[test]
-    fn repo_keeper_allows_git_not_kernel() {
+    fn swarm_coordinator_delegates_to_repo_keeper() {
         let reg = fixture_registry();
-        let agent = reg.get("repo-keeper").unwrap();
-        assert!(agent.allows_native_tool("git.status"));
-        assert!(agent.allows_native_tool("git.diff"));
-        assert!(!agent.allows_native_tool("kernel.build"));
+        let orch = reg.get("swarm-coordinator").unwrap();
+        let repo = reg.get("repo-keeper").unwrap();
+        assert!(orch.validate_handoff_to(repo).is_ok());
+        assert!(orch.validate_handoff_to(reg.get("kernel-engineer").unwrap()).is_ok());
     }
 
     #[test]
-    fn wildcard_prefix_matches() {
-        assert!(pattern_matches("kernel.status", "kernel.*"));
-        assert!(!pattern_matches("git.status", "kernel.*"));
+    fn find_delegate_for_git_status() {
+        let reg = fixture_registry();
+        let delegate = reg.find_delegate_for_tool("git.status").unwrap();
+        assert_eq!(delegate.id, "repo-keeper");
     }
 }
