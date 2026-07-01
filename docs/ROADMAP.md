@@ -234,3 +234,19 @@ code ~/dev/projects/RMNG-OS
 - `rmng ask --auto-continue` partial dispatch loop
 - Chain hop failure recording + audit
 - live_llm_chain_e2e (Groq/Grok); orchestration-usage.md
+### Sprint 25 — Auto-continue foundation ✅
+- `AutoContinueLoop`, chain continuation session state, CLI `--auto-continue`
+- Chain error recovery, hop failure policies, parser hardening
+### Sprint 26 — Daemon auto-continue ✅
+- `DaemonOrchestrator`, `orchestration.continue` IPC, background post-dispatch continue
+### Sprint 27 — Production-safe auto-continue ✅
+- Per-session continuation mutex, timeout finalization, socket E2E tests
+### Sprint 28 — Production readiness & operational polish ✅
+- `ReadinessReport`, `rmngd --validate`, `rmng health`, improved `observe --json`
+- systemd `ExecStartPre`, install validation, ops documentation
+### Sprint 29 — Health consistency & hardening ✅
+- `rmng health --require-daemon` and `--strict` exit semantics
+- Health JSON schema v2 with `failures` array
+- Integration tests for `rmng health --json` and `rmngd --validate`
+- Configurable systemd paths via `rmngd.service.in` + `RMNG_PROJECT_ROOT`
+- Install script skips restart on validate ERROR; docs sync

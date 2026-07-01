@@ -25,7 +25,7 @@ use rmng_nervous::{
     long_about = "Common workflows:\n  \
       rmng session new && rmng ask --session <id> --agent swarm-coordinator \"...\"\n  \
       rmng observe --json          # monitoring snapshot\n  \
-      rmng health --json           # cron-friendly health check\n  \
+      rmng health --json --strict  # production liveness probe\n  \
       rmng llm health              # LLM provider probe",
     version
 )]
@@ -114,6 +114,16 @@ enum Commands {
         json: bool,
         #[arg(long, help = "Skip live LLM network probe (faster; checks config/keys only)")]
         quick: bool,
+        #[arg(
+            long,
+            help = "Fail if rmngd is not running (liveness probe for systemd/cron)"
+        )]
+        require_daemon: bool,
+        #[arg(
+            long,
+            help = "Strict exit codes: fail if daemon down, any circuit open, or budget deny"
+        )]
+        strict: bool,
     },
     /// Deep observability — LLM health, budgets, circuits, MCP resources, audit tail
     Observe {
@@ -894,7 +904,20 @@ async fn main() {
             }
             0
         }
-        Commands::Health { json, quick } => health::run_health(json, quick).await,
+        Commands::Health {
+            json,
+            quick,
+            require_daemon,
+            strict,
+        } => {
+            health::run_health(health::HealthOptions {
+                json,
+                quick,
+                require_daemon,
+                strict,
+            })
+            .await
+        }
         Commands::Status => {
             let cfg = RmngConfig::load();
             let connector = NervousConnector::from_config(cfg);
@@ -924,7 +947,7 @@ async fn main() {
                 if daemon_running() { "running" } else { "stopped" },
                 socket_path().display()
             );
-            println!("tip: rmng health — full readiness; rmng observe — deep metrics");
+            println!("tip: rmng health --strict — liveness; rmng observe — deep metrics");
             0
         }
         Commands::Observe { cost, json } => {

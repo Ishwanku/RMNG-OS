@@ -8,7 +8,9 @@ Common commands for day-to-day RMNG-OS kernel development.
 wsl -d Ubuntu-24.04          # from PowerShell, if needed
 cd ~/dev/projects/RMNG-OS
 ~/scripts/rmng-status.sh     # verify kernel environment
-rmng status                  # verify agent runtime (if installed)
+rmngd --validate             # pre-flight: config, agents, dirs
+rmng health --strict         # production liveness (daemon + circuits + budget)
+rmng status                  # quick runtime summary
 rmngd-status                 # alias — systemd user unit
 ```
 
@@ -18,6 +20,8 @@ rmngd-status                 # alias — systemd user unit
 cd ~/dev/projects/RMNG-OS
 ./scripts/dev-environment-setup.sh   # dirs, ~/.rmng, shell snippets, rust check
 ./scripts/install-rmng.sh              # rmng + rmngd + allowlist + systemd
+# Custom clone path:
+# RMNG_PROJECT_ROOT=/path/to/RMNG-OS ./scripts/install-rmng.sh
 ./scripts/setup-dev-mcp.sh             # IDE MCP only (~/.config/rmng/)
 ./scripts/check-dev-prerequisites.sh   # report missing tools
 ```

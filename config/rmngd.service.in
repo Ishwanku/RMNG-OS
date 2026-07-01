@@ -1,0 +1,25 @@
+[Unit]
+Description=RMNG-OS agent daemon (rmngd) — local execution plane
+Documentation=file:@RMNG_PROJECT_ROOT@/docs/integrations/operations-usage.md
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=@HOME@/.cargo/bin/rmngd
+
+[Service]
+Type=simple
+WorkingDirectory=@RMNG_PROJECT_ROOT@
+# Optional secrets (API keys); leading '-' ignores missing file
+EnvironmentFile=-@HOME@/.rmng/secrets.env
+EnvironmentFile=-@HOME@/.config/environment.d/rmng.conf
+Environment=RUST_LOG=info
+Environment=RMNG_PROJECT_ROOT=@RMNG_PROJECT_ROOT@
+Environment=PATH=@HOME@/.cargo/bin:@HOME@/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Fail fast on ERROR-level misconfiguration (WARN still allows start)
+ExecStartPre=@HOME@/.cargo/bin/rmngd --validate
+ExecStart=@HOME@/.cargo/bin/rmngd
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

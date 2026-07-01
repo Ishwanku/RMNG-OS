@@ -33,7 +33,13 @@ systemctl --user restart rmngd
 journalctl --user -u rmngd -f       # handoffs, continuation, budgets, circuits
 ```
 
-Tune `RMNG_PROJECT_ROOT` and paths in the unit if your clone lives elsewhere.
+Install generates the unit from `config/rmngd.service.in` with your paths:
+
+```bash
+RMNG_PROJECT_ROOT=/your/clone ./scripts/install-rmng.sh
+```
+
+If validation fails, install **skips** `systemctl restart` to avoid a restart loop — fix ERROR items, then `rmngd --validate && systemctl --user restart rmngd`.
 
 ### Secrets & config
 
@@ -48,6 +54,12 @@ cp config/rmng-config.toml.example ~/.rmng/config.toml
 ### Cron / health probes
 
 ```bash
+# Production liveness (daemon + no open circuits + no budget deny):
+rmng health --json --strict
+
+# Daemon must be running (readiness-only liveness):
+rmng health --require-daemon --json
+
 # Lightweight (no LLM network call):
 rmng health --quick --json
 
@@ -58,7 +70,16 @@ rmng health --json
 rmng observe --json
 ```
 
-Exit codes: `rmng health` → `0` healthy, `1` unhealthy (tampered audit, LLM down, readiness ERROR). `rmng llm health` → `0` when provider reachable and no open circuits.
+Exit codes:
+
+| Command | `0` when | `1` when |
+|---------|----------|----------|
+| `rmng health` | Readiness OK, audit valid, LLM healthy (if probed) | Readiness ERROR, tampered audit, LLM down |
+| `rmng health --require-daemon` | Above + rmngd running | rmngd stopped |
+| `rmng health --strict` | Above + rmngd running + no open circuits + budget not DENY | Any strict condition fails |
+| `rmng llm health` | Provider reachable, no open circuits | LLM down or circuits open |
+
+JSON schema v2 includes a `failures` array explaining unhealthy results.
 
 ## Monitoring commands
 

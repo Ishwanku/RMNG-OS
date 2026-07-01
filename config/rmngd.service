@@ -1,3 +1,7 @@
+# Generated reference unit — install via ./scripts/install-rmng.sh (uses rmngd.service.in).
+# Defaults assume clone at ~/dev/projects/RMNG-OS. Override with:
+#   RMNG_PROJECT_ROOT=/your/path ./scripts/install-rmng.sh
+
 [Unit]
 Description=RMNG-OS agent daemon (rmngd) — local execution plane
 Documentation=file:%h/dev/projects/RMNG-OS/docs/integrations/operations-usage.md
@@ -8,13 +12,11 @@ ConditionPathExists=%h/.cargo/bin/rmngd
 [Service]
 Type=simple
 WorkingDirectory=%h/dev/projects/RMNG-OS
-# Optional secrets (API keys); leading '-' ignores missing file
 EnvironmentFile=-%h/.rmng/secrets.env
 EnvironmentFile=-%h/.config/environment.d/rmng.conf
 Environment=RUST_LOG=info
 Environment=RMNG_PROJECT_ROOT=%h/dev/projects/RMNG-OS
 Environment=PATH=%h/.cargo/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-# Fail fast on ERROR-level misconfiguration (WARN still allows start)
 ExecStartPre=%h/.cargo/bin/rmngd --validate
 ExecStart=%h/.cargo/bin/rmngd
 Restart=on-failure
