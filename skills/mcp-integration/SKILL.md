@@ -31,6 +31,7 @@ MCP tools run as **ephemeral subprocesses** under `rmngd`. The LLM never calls M
 | `github` | `search_issues`, `get_issue` | research-curator |
 | `git` | `git.log` | repo-keeper |
 | `fetch` | `fetch` | web-researcher |
+| `markitdown` | `convert_to_markdown` | web-researcher |
 | `playwright` | `browser_navigate`, `browser_snapshot` | web-researcher (opt-in) |
 
 ## Safety

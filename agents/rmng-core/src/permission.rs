@@ -219,6 +219,60 @@ mod tests {
         assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Deny(_)));
     }
 
+    fn test_gate_with_fetch_mcp() -> PermissionGate {
+        let mut servers = HashMap::new();
+        servers.insert(
+            "fetch".into(),
+            McpServerConfig {
+                enabled: true,
+                command: "npx".into(),
+                args: vec!["-y".into(), "@modelcontextprotocol/server-fetch".into()],
+                allowed_tools: vec!["fetch".into()],
+                isolation: None,
+            },
+        );
+        PermissionGate::from_registry(&fixture_registry()).with_mcp_allowlist(McpAllowlist { servers })
+    }
+
+    #[test]
+    fn allows_mcp_fetch() {
+        let gate = test_gate_with_fetch_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "fetch".into(),
+            mcp_tool: "fetch".into(),
+            mcp_args: serde_json::json!({"url": "https://example.com"}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
+    }
+
+    fn test_gate_with_markitdown_mcp() -> PermissionGate {
+        let mut servers = HashMap::new();
+        servers.insert(
+            "markitdown".into(),
+            McpServerConfig {
+                enabled: true,
+                command: "uvx".into(),
+                args: vec!["markitdown-mcp".into()],
+                allowed_tools: vec!["convert_to_markdown".into()],
+                isolation: None,
+            },
+        );
+        PermissionGate::from_registry(&fixture_registry()).with_mcp_allowlist(McpAllowlist { servers })
+    }
+
+    #[test]
+    fn allows_mcp_markitdown() {
+        let gate = test_gate_with_markitdown_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "markitdown".into(),
+            mcp_tool: "convert_to_markdown".into(),
+            mcp_args: serde_json::json!({"uri": "https://example.com/doc.pdf"}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
+    }
+
     #[test]
     fn denies_disallowed_mcp_tool() {
         let gate = test_gate_with_mcp();

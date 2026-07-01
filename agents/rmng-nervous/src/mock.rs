@@ -108,6 +108,56 @@ pub fn mock_core_intent(
                 metadata,
             };
         }
+        if a.id == "web-researcher" {
+            if lower.contains("pdf")
+                || lower.contains("docx")
+                || lower.contains("convert")
+                || lower.contains("markitdown")
+                || lower.contains("document")
+                || lower.contains("file://")
+            {
+                let uri = if lower.contains("file://") {
+                    prompt
+                        .split_whitespace()
+                        .find(|w| w.starts_with("file://"))
+                        .unwrap_or("file:///tmp/sample.pdf")
+                } else {
+                    "https://example.com/sample.pdf"
+                };
+                return CoreIntent::McpProxy {
+                    mcp_server: "markitdown".into(),
+                    mcp_tool: "convert_to_markdown".into(),
+                    mcp_args: serde_json::json!({ "uri": uri }),
+                    metadata,
+                };
+            }
+            if lower.contains("fetch")
+                || lower.contains("http://")
+                || lower.contains("https://")
+                || lower.contains("url")
+                || lower.contains("web page")
+            {
+                let url = prompt
+                    .split_whitespace()
+                    .find(|w| w.starts_with("http://") || w.starts_with("https://"))
+                    .unwrap_or("https://example.com");
+                return CoreIntent::McpProxy {
+                    mcp_server: "fetch".into(),
+                    mcp_tool: "fetch".into(),
+                    mcp_args: serde_json::json!({
+                        "url": url,
+                        "max_length": 8000
+                    }),
+                    metadata,
+                };
+            }
+            return CoreIntent::PlanOnly {
+                reasoning: format!(
+                    "Web research plan for: {prompt}. Use fetch for live URLs or markitdown for documents."
+                ),
+                metadata,
+            };
+        }
         if a.id == "repo-keeper" {
             if lower.contains("diff") || lower.contains("changes") {
                 return CoreIntent::ToolExecute {

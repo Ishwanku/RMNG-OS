@@ -35,12 +35,32 @@ command = "uvx"
 args = ["mcp-server-git", "--repository", "/path/to/RMNG-OS"]
 allowed_tools = ["git.log"]
 
-# Sprint 12 — read-only URL fetch (Track 2)
+# Sprint 12–13 — read-only URL fetch (Track 2)
 [servers.fetch]
 enabled = true
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-fetch"]
 allowed_tools = ["fetch"]
+
+[servers.fetch.isolation]
+memory_mb = 256
+pids_max = 32
+cgroup = true
+new_session = true
+
+# Sprint 13 — document → markdown (Track 2; https/file/data URIs only)
+[servers.markitdown]
+enabled = true
+command = "uvx"
+args = ["markitdown-mcp"]
+allowed_tools = ["convert_to_markdown"]
+
+[servers.markitdown.isolation]
+memory_mb = 512
+pids_max = 48
+cgroup = true
+new_session = true
+no_new_privs = true
 
 # Sprint 12 — DOM navigation (opt-in: disabled by default)
 [servers.playwright]

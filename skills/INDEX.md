@@ -10,6 +10,10 @@ Intent-shaping guides for the nervous system (BYO-LLM). **Do not execute tools d
 | GitHub workflow | [github-workflow/SKILL.md](github-workflow/SKILL.md) | PR status, `gh` context, and MCP `git.log` for commit history |
 | Phase gates | [phase-gates/SKILL.md](phase-gates/SKILL.md) | Phase completion checks against `docs/ROADMAP.md` success criteria |
 | TDD discipline | [tdd-discipline/SKILL.md](tdd-discipline/SKILL.md) | Red-green-refactor phase gates (superpowers-adapted) |
+| Web research | [web-research/SKILL.md](web-research/SKILL.md) | MCP fetch for live URLs |
+| Doc ingestion | [doc-ingestion/SKILL.md](doc-ingestion/SKILL.md) | Markitdown MCP for PDF/Office files |
+| Doc summarization | [doc-summarization/SKILL.md](doc-summarization/SKILL.md) | Session-aware synthesis of tool results |
+| Source evaluation | [source-evaluation/SKILL.md](source-evaluation/SKILL.md) | Integration track scoring for external repos |
 | MCP integration | [mcp-integration/SKILL.md](mcp-integration/SKILL.md) | Track 2 MCP proxy usage and allowlist rules |
 | Spec compliance | [spec-compliance/SKILL.md](spec-compliance/SKILL.md) | agentskills.io + CoreIntent v2 alignment |
 | Research workflow | [research-workflow/SKILL.md](research-workflow/SKILL.md) | Research and documentation curation |

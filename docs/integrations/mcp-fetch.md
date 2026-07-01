@@ -32,11 +32,13 @@ Official MCP `fetch` server retrieves URL content as markdown/text for LLM conte
 ## Implementation
 
 ### Track 2 — MCP Proxy
-- [x] Example in `config/mcp-allowlist.toml.example`
+- [x] Example in `config/mcp-allowlist.toml.example` (with isolation)
 - [x] Example intent `agents/schemas/mcp-fetch.intent.json`
-- [x] `web-researcher` agent definition
+- [x] `web-researcher` agent definition + skills
+- [x] E2E tests `agents/rmng-nervous/tests/fetch_e2e.rs`
+- [x] Session write-back verified in full-loop test
+- [x] Usage guide: [web-research-usage.md](web-research-usage.md)
 - [ ] User registration: `./scripts/register-mcp-tool.sh fetch npx -y @modelcontextprotocol/server-fetch --tools fetch`
-- [ ] E2E test when rmngd running
 
 ## Rollback
 

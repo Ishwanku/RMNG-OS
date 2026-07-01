@@ -1,0 +1,13 @@
+{
+  "schema_version": "2",
+  "action": "mcp.proxy",
+  "server": "markitdown",
+  "tool": "convert_to_markdown",
+  "params": {
+    "uri": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+  },
+  "metadata": {
+    "agent_id": "web-researcher",
+    "reason": "document ingestion smoke test"
+  }
+}

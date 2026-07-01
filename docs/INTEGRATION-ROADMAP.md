@@ -95,12 +95,11 @@ The GitHub Repos analysis (130+ entries) clusters into:
 
 | Item | Track | Deliverable | Status |
 |------|-------|-------------|--------|
-| MCP Fetch | 2 | allowlist + doc + example intent | ✅ Started |
-| Playwright MCP | 2 | allowlist + doc + web-researcher agent | ✅ Started |
+| MCP Fetch | 2 | E2E tests + session write-back + isolation | ✅ Complete (Sprint 13) |
+| Markitdown MCP | 2 | allowlist + doc-ingestion skill + example intent | ✅ Complete (Sprint 13) |
+| web-researcher agent | L3 | 4 skills + budget + fetch/markitdown scope | ✅ Complete (Sprint 13) |
+| Playwright MCP | 2 | allowlist + doc (opt-in) | ✅ Started (Sprint 12) |
 | TDD discipline skill | 3 | `skills/tdd-discipline/SKILL.md` | ✅ Started |
-| MCP integration skill | 3 | `skills/mcp-integration/SKILL.md` | ✅ Started |
-| Anthropic skills alignment | 3 | `skills/spec-compliance/SKILL.md` | ✅ Started |
-| Markitdown MCP | 2 | intake doc only | 🔄 Evaluating |
 | Context7 | 4 | rejection doc | ✅ Documented |
 
 ---
