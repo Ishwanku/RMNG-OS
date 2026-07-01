@@ -10,6 +10,8 @@ fn skill_metadata(skill_name: Option<&str>) -> Option<Metadata> {
         handoff_chain: None,
         handoff_return_to: None,
         chain_id: None,
+        hop_failure_policy: None,
+        hop_retry_max: None,
         trace_id: None,
     })
 }
@@ -26,6 +28,8 @@ fn session_metadata(
         handoff_chain: None,
         handoff_return_to: None,
         chain_id: None,
+        hop_failure_policy: None,
+        hop_retry_max: None,
         trace_id: None,
     });
     if let Some(sess) = session {
@@ -233,6 +237,13 @@ pub fn mock_core_intent(
 
     // Agent-scoped routing hints
     if let Some(a) = agent {
+        if a.id == "repo-keeper" && prompt.contains("__inject_handoff_fail__") {
+            return CoreIntent::ToolExecute {
+                target: "kernel.build".into(),
+                parameters: serde_json::json!({}),
+                metadata,
+            };
+        }
         if a.id == "swarm-coordinator" {
             if lower.contains("chain") || lower.contains("multi-hop") || lower.contains("delegate chain") {
                 let mut meta = metadata.clone();

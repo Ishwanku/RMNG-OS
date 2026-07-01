@@ -289,6 +289,70 @@ impl SessionStore {
         self.save(session)
     }
 
+    /// Append a hop policy decision to orchestration audit trail (Sprint 25).
+    pub fn record_hop_policy_decision(
+        &self,
+        session: &mut AgentSession,
+        hop_index: usize,
+        from_agent: &str,
+        to_agent: &str,
+        policy: &str,
+        action: &str,
+        error: &str,
+        attempt: Option<u32>,
+    ) -> Result<(), SessionError> {
+        let decision = serde_json::json!({
+            "hop_index": hop_index,
+            "from_agent": from_agent,
+            "to_agent": to_agent,
+            "policy": policy,
+            "action": action,
+            "error": error,
+            "attempt": attempt,
+            "timestamp": Utc::now().to_rfc3339(),
+        });
+        if let Some(orch) = session.shared_context.get_mut("orchestration") {
+            if let Some(obj) = orch.as_object_mut() {
+                let decisions = obj
+                    .entry("hop_decisions")
+                    .or_insert_with(|| serde_json::json!([]));
+                if let Some(arr) = decisions.as_array_mut() {
+                    arr.push(decision);
+                }
+            }
+        }
+        session.updated_at = Utc::now();
+        self.save(session)
+    }
+
+    /// Record a skipped hop (shortcut recovery) in orchestration state (Sprint 25).
+    pub fn record_skipped_hop(
+        &self,
+        session: &mut AgentSession,
+        hop_index: usize,
+        from_agent: &str,
+        skipped_agent: &str,
+        error: &str,
+    ) -> Result<(), SessionError> {
+        if let Some(orch) = session.shared_context.get_mut("orchestration") {
+            if let Some(obj) = orch.as_object_mut() {
+                let skipped = obj
+                    .entry("skipped_hops")
+                    .or_insert_with(|| serde_json::json!([]));
+                if let Some(arr) = skipped.as_array_mut() {
+                    arr.push(serde_json::json!({
+                        "hop_index": hop_index,
+                        "from_agent": from_agent,
+                        "skipped_agent": skipped_agent,
+                        "error": error,
+                    }));
+                }
+            }
+        }
+        session.updated_at = Utc::now();
+        self.save(session)
+    }
+
     pub fn clear_orchestration_state(&self, session: &mut AgentSession) -> Result<(), SessionError> {
         session.shared_context.remove("orchestration");
         session.updated_at = Utc::now();

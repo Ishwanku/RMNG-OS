@@ -62,6 +62,16 @@
           "type": "string",
           "minLength": 1,
           "description": "Correlation id for multi-hop orchestration workflows"
+        },
+        "hop_failure_policy": {
+          "type": "string",
+          "enum": ["retry", "skip", "abort"],
+          "description": "Policy when a chain hop fails (Sprint 25)"
+        },
+        "hop_retry_max": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Max retries per hop when hop_failure_policy is retry"
         }
       }
     },

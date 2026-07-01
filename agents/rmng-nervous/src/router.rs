@@ -4,7 +4,7 @@ use crate::nervous_audit::log_nervous_event;
 use crate::skill::{load_skills_for_agent, AgentSkill, SkillError};
 use crate::{ConnectorError, NervousConnector};
 use rmng_core::session::SessionStore;
-use rmng_core::CoreIntent;
+use rmng_core::{CoreIntent, HandoffChainOptions, HopFailurePolicy};
 
 /// Resolved routing context for an agent invocation.
 #[derive(Debug, Clone)]
@@ -33,6 +33,7 @@ pub enum RouteOutcome {
     HandoffChain {
         chain: Vec<String>,
         hops: Vec<HandoffHopRecord>,
+        skipped_hops: Vec<SkippedHopRecord>,
         intent: CoreIntent,
         reason: String,
     },
@@ -44,6 +45,15 @@ pub struct HandoffHopRecord {
     pub from_agent: String,
     pub to_agent: String,
     pub reason: String,
+}
+
+/// Hop skipped during chain recovery (Sprint 25).
+#[derive(Debug, Clone)]
+pub struct SkippedHopRecord {
+    pub hop_index: usize,
+    pub from_agent: String,
+    pub skipped_agent: String,
+    pub error: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -285,6 +295,8 @@ Return context: {prompt}"
                     handoff_chain: None,
                     handoff_return_to: None,
                     chain_id: None,
+                hop_failure_policy: None,
+                    hop_retry_max: None,
                 }),
             }
         } else {
@@ -341,9 +353,29 @@ Return context: {prompt}"
         prompt: &str,
         reason: &str,
     ) -> Result<RouteOutcome, RouterError> {
+        self.handoff_chain_with_options(
+            session_id,
+            chain,
+            prompt,
+            reason,
+            HandoffChainOptions::default(),
+        )
+        .await
+    }
+
+    /// Multi-hop chain with configurable hop failure policy (Sprint 25).
+    pub async fn handoff_chain_with_options(
+        &self,
+        session_id: &str,
+        chain: &[String],
+        prompt: &str,
+        reason: &str,
+        options: HandoffChainOptions,
+    ) -> Result<RouteOutcome, RouterError> {
         self.validate_handoff_chain(session_id, chain)?;
         let chain_id = session_id.to_string();
         let mut hops: Vec<HandoffHopRecord> = Vec::new();
+        let mut skipped_hops: Vec<SkippedHopRecord> = Vec::new();
         let mut last_intent: Option<CoreIntent> = None;
 
         {
@@ -361,91 +393,195 @@ Return context: {prompt}"
                         "origin_agent": chain.first(),
                         "return_to": chain.first(),
                         "status": "in_progress",
+                        "hop_failure_policy": format!("{:?}", options.hop_failure_policy).to_ascii_lowercase(),
+                        "hop_retry_max": options.hop_retry_max,
                     }),
                 )
                 .map_err(|e| RouterError::Session(e.to_string()))?;
         }
 
-        for i in 0..chain.len() - 1 {
-            let from_id = &chain[i];
-            let to_id = &chain[i + 1];
+        let mut i = 0usize;
+        while i < chain.len().saturating_sub(1) {
+            let from_id = chain[i].clone();
+            let to_id = chain[i + 1].clone();
             let hop_reason = if i == 0 {
                 reason.to_string()
             } else {
                 format!("chain hop {from_id} → {to_id}")
             };
-            let outcome = match self
-                .handoff(session_id, from_id, to_id, prompt, &hop_reason)
+
+            match self
+                .execute_chain_hop(
+                    session_id,
+                    &chain_id,
+                    i,
+                    &from_id,
+                    &to_id,
+                    prompt,
+                    &hop_reason,
+                    &options,
+                )
                 .await
             {
-                Ok(o) => o,
+                Ok(outcome) => {
+                    if let RouteOutcome::Handoff {
+                        from_agent,
+                        to_agent,
+                        from_layer,
+                        to_layer,
+                        reason: hop,
+                        intent,
+                        ..
+                    } = &outcome
+                    {
+                        tracing::info!(
+                            session = session_id,
+                            "{from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {hop}"
+                        );
+                        log_nervous_event(
+                            "nervous.handoff_chain_hop",
+                            "success",
+                            Some(&format!(
+                                "session={session_id} hop={i} {from_agent}→{to_agent} chain_id={chain_id}"
+                            )),
+                        );
+                        hops.push(HandoffHopRecord {
+                            from_agent: from_agent.clone(),
+                            to_agent: to_agent.clone(),
+                            reason: hop.clone(),
+                        });
+                        last_intent = Some(intent.clone());
+                    }
+                    self.bump_chain_progress(session_id, i + 1, &to_id)?;
+                    i += 1;
+                }
                 Err(e) => {
                     let msg = e.to_string();
-                    if let Ok(mut session) = self.sessions.load(session_id) {
-                        let _ = self.sessions.record_chain_failure(
-                            &mut session,
-                            i,
-                            from_id,
-                            to_id,
-                            &msg,
-                        );
-                    }
-                    log_nervous_event(
-                        "nervous.handoff_chain_hop",
-                        "failed",
-                        Some(&format!(
-                            "session={session_id} hop={i} {from_id}→{to_id} error={msg}"
-                        )),
-                    );
-                    return Err(e);
-                }
-            };
-            if let RouteOutcome::Handoff {
-                from_agent,
-                to_agent,
-                from_layer,
-                to_layer,
-                reason: hop,
-                intent,
-                ..
-            } = &outcome
-            {
-                tracing::info!(
-                    session = session_id,
-                    "{from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {hop}"
-                );
-                log_nervous_event(
-                    "nervous.handoff_chain_hop",
-                    "success",
-                    Some(&format!(
-                        "session={session_id} hop={i} {from_agent}→{to_agent} chain_id={chain_id}"
-                    )),
-                );
-                hops.push(HandoffHopRecord {
-                    from_agent: from_agent.clone(),
-                    to_agent: to_agent.clone(),
-                    reason: hop.clone(),
-                });
-                last_intent = Some(intent.clone());
-            }
+                    match options.hop_failure_policy {
+                        HopFailurePolicy::Abort => {
+                            self.abort_chain_hop(
+                                session_id, i, &from_id, &to_id, &msg, "abort", &options,
+                            )?;
+                            return Err(e);
+                        }
+                        HopFailurePolicy::Retry => {
+                            // Retries exhausted inside execute_chain_hop; treat as abort.
+                            self.abort_chain_hop(
+                                session_id, i, &from_id, &to_id, &msg, "abort_after_retry", &options,
+                            )?;
+                            return Err(e);
+                        }
+                        HopFailurePolicy::Skip => {
+                            self.log_hop_policy_decision(
+                                session_id,
+                                i,
+                                &from_id,
+                                &to_id,
+                                &options,
+                                "skip",
+                                &msg,
+                                None,
+                            )?;
+                            if let Ok(mut session) = self.sessions.load(session_id) {
+                                let _ = self.sessions.record_skipped_hop(
+                                    &mut session,
+                                    i,
+                                    &from_id,
+                                    &to_id,
+                                    &msg,
+                                );
+                            }
+                            skipped_hops.push(SkippedHopRecord {
+                                hop_index: i,
+                                from_agent: from_id.clone(),
+                                skipped_agent: to_id.clone(),
+                                error: msg.clone(),
+                            });
+                            log_nervous_event(
+                                "nervous.handoff_chain_hop",
+                                "skipped",
+                                Some(&format!(
+                                    "session={session_id} hop={i} {from_id}→{to_id} policy=skip error={msg}"
+                                )),
+                            );
 
-            let mut session = self
-                .sessions
-                .load(session_id)
-                .map_err(|e| RouterError::Session(e.to_string()))?;
-            if let Some(orch) = session.shared_context.get_mut("orchestration") {
-                if let Some(obj) = orch.as_object_mut() {
-                    obj.insert(
-                        "hops_completed".into(),
-                        serde_json::json!(i + 1),
-                    );
-                    obj.insert("active_agent".into(), serde_json::json!(to_id));
+                            if i + 2 < chain.len() {
+                                let shortcut_to = chain[i + 2].clone();
+                                let shortcut_reason =
+                                    format!("skip recovery {from_id} → {shortcut_to} (skipped {to_id})");
+                                match self
+                                    .execute_chain_hop(
+                                        session_id,
+                                        &chain_id,
+                                        i,
+                                        &from_id,
+                                        &shortcut_to,
+                                        prompt,
+                                        &shortcut_reason,
+                                        &options,
+                                    )
+                                    .await
+                                {
+                                    Ok(outcome) => {
+                                        if let RouteOutcome::Handoff {
+                                            from_agent,
+                                            to_agent,
+                                            reason: hop,
+                                            intent,
+                                            ..
+                                        } = &outcome
+                                        {
+                                            log_nervous_event(
+                                                "nervous.handoff_chain_hop",
+                                                "success",
+                                                Some(&format!(
+                                                    "session={session_id} hop={i} shortcut {from_agent}→{to_agent} chain_id={chain_id}"
+                                                )),
+                                            );
+                                            hops.push(HandoffHopRecord {
+                                                from_agent: from_agent.clone(),
+                                                to_agent: to_agent.clone(),
+                                                reason: hop.clone(),
+                                            });
+                                            last_intent = Some(intent.clone());
+                                        }
+                                        self.bump_chain_progress(session_id, i + 2, &shortcut_to)?;
+                                        i += 2;
+                                    }
+                                    Err(shortcut_err) => {
+                                        let shortcut_msg = shortcut_err.to_string();
+                                        self.abort_chain_hop(
+                                            session_id,
+                                            i,
+                                            &from_id,
+                                            &shortcut_to,
+                                            &shortcut_msg,
+                                            "abort_after_skip_shortcut_failed",
+                                            &options,
+                                        )?;
+                                        return Err(shortcut_err);
+                                    }
+                                }
+                            } else {
+                                // No further agents; partial completion at from_id.
+                                tracing::warn!(
+                                    session = session_id,
+                                    hop = i,
+                                    "chain completed with skipped terminal hop"
+                                );
+                                break;
+                            }
+                        }
+                    }
                 }
             }
-            self.sessions
-                .save(&session)
-                .map_err(|e| RouterError::Session(e.to_string()))?;
         }
+
+        let final_status = if skipped_hops.is_empty() {
+            "completed"
+        } else {
+            "completed_with_skips"
+        };
 
         {
             let mut session = self
@@ -454,10 +590,10 @@ Return context: {prompt}"
                 .map_err(|e| RouterError::Session(e.to_string()))?;
             if let Some(orch) = session.shared_context.get_mut("orchestration") {
                 if let Some(obj) = orch.as_object_mut() {
-                    obj.insert("status".into(), serde_json::json!("completed"));
+                    obj.insert("status".into(), serde_json::json!(final_status));
                     obj.insert(
                         "hops_completed".into(),
-                        serde_json::json!(chain.len().saturating_sub(1)),
+                        serde_json::json!(hops.len()),
                     );
                 }
             }
@@ -470,8 +606,9 @@ Return context: {prompt}"
             "nervous.handoff_chain_complete",
             "success",
             Some(&format!(
-                "session={session_id} hops={} chain_id={chain_id}",
-                hops.len()
+                "session={session_id} hops={} skipped={} status={final_status} chain_id={chain_id}",
+                hops.len(),
+                skipped_hops.len()
             )),
         );
 
@@ -479,9 +616,161 @@ Return context: {prompt}"
         Ok(RouteOutcome::HandoffChain {
             chain: chain.to_vec(),
             hops,
+            skipped_hops,
             intent,
             reason: reason.to_string(),
         })
+    }
+
+    async fn execute_chain_hop(
+        &self,
+        session_id: &str,
+        chain_id: &str,
+        hop_index: usize,
+        from_id: &str,
+        to_id: &str,
+        prompt: &str,
+        hop_reason: &str,
+        options: &HandoffChainOptions,
+    ) -> Result<RouteOutcome, RouterError> {
+        let mut attempt = 0u32;
+        loop {
+            match self
+                .handoff(session_id, from_id, to_id, prompt, hop_reason)
+                .await
+            {
+                Ok(outcome) => return Ok(outcome),
+                Err(e) => {
+                    attempt += 1;
+                    let msg = e.to_string();
+                    if options.hop_failure_policy == HopFailurePolicy::Retry
+                        && attempt <= options.hop_retry_max
+                    {
+                        self.log_hop_policy_decision(
+                            session_id,
+                            hop_index,
+                            from_id,
+                            to_id,
+                            options,
+                            "retry",
+                            &msg,
+                            Some(attempt),
+                        )?;
+                        log_nervous_event(
+                            "nervous.handoff_chain_hop",
+                            "retry",
+                            Some(&format!(
+                                "session={session_id} hop={hop_index} {from_id}→{to_id} attempt={attempt}/{} chain_id={chain_id} error={msg}",
+                                options.hop_retry_max
+                            )),
+                        );
+                        continue;
+                    }
+                    log_nervous_event(
+                        "nervous.handoff_chain_hop",
+                        "failed",
+                        Some(&format!(
+                            "session={session_id} hop={hop_index} {from_id}→{to_id} chain_id={chain_id} error={msg}"
+                        )),
+                    );
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    fn bump_chain_progress(
+        &self,
+        session_id: &str,
+        hops_completed: usize,
+        active_agent: &str,
+    ) -> Result<(), RouterError> {
+        let mut session = self
+            .sessions
+            .load(session_id)
+            .map_err(|e| RouterError::Session(e.to_string()))?;
+        if let Some(orch) = session.shared_context.get_mut("orchestration") {
+            if let Some(obj) = orch.as_object_mut() {
+                obj.insert("hops_completed".into(), serde_json::json!(hops_completed));
+                obj.insert("active_agent".into(), serde_json::json!(active_agent));
+            }
+        }
+        self.sessions
+            .save(&session)
+            .map_err(|e| RouterError::Session(e.to_string()))
+    }
+
+    fn log_hop_policy_decision(
+        &self,
+        session_id: &str,
+        hop_index: usize,
+        from_id: &str,
+        to_id: &str,
+        options: &HandoffChainOptions,
+        action: &str,
+        error: &str,
+        attempt: Option<u32>,
+    ) -> Result<(), RouterError> {
+        if let Ok(mut session) = self.sessions.load(session_id) {
+            let policy = format!("{:?}", options.hop_failure_policy).to_ascii_lowercase();
+            let _ = self.sessions.record_hop_policy_decision(
+                &mut session,
+                hop_index,
+                from_id,
+                to_id,
+                &policy,
+                action,
+                error,
+                attempt,
+            );
+        }
+        log_nervous_event(
+            "nervous.handoff_chain_policy",
+            action,
+            Some(&format!(
+                "session={session_id} hop={hop_index} {from_id}→{to_id} policy={} action={action} error={error}",
+                format!("{:?}", options.hop_failure_policy).to_ascii_lowercase()
+            )),
+        );
+        Ok(())
+    }
+
+    fn abort_chain_hop(
+        &self,
+        session_id: &str,
+        hop_index: usize,
+        from_id: &str,
+        to_id: &str,
+        error: &str,
+        action: &str,
+        options: &HandoffChainOptions,
+    ) -> Result<(), RouterError> {
+        self.log_hop_policy_decision(
+            session_id,
+            hop_index,
+            from_id,
+            to_id,
+            options,
+            action,
+            error,
+            None,
+        )?;
+        if let Ok(mut session) = self.sessions.load(session_id) {
+            let _ = self.sessions.record_chain_failure(
+                &mut session,
+                hop_index,
+                from_id,
+                to_id,
+                error,
+            );
+        }
+        Ok(())
+    }
+
+    fn chain_options_from_plan(plan: &CoreIntent) -> HandoffChainOptions {
+        plan.metadata()
+            .map(HandoffChainOptions::from_metadata)
+            .unwrap_or_default()
     }
 
     async fn orchestrate(
@@ -640,9 +929,16 @@ Return context: {prompt}"
                 chain = ?chain,
                 "{context} handoff_chain"
             );
+            let options = Self::chain_options_from_plan(plan);
             return Ok(Some(
-                self.handoff_chain(session_id, &chain, prompt, &format!("{context} handoff chain"))
-                    .await?,
+                self.handoff_chain_with_options(
+                    session_id,
+                    &chain,
+                    prompt,
+                    &format!("{context} handoff chain"),
+                    options,
+                )
+                .await?,
             ));
         }
 
@@ -721,6 +1017,8 @@ Return context: {prompt}"
                 handoff_chain: None,
                 handoff_return_to: None,
                 chain_id: None,
+                hop_failure_policy: None,
+                    hop_retry_max: None,
             });
             if let Some(sid) = session_id {
                 m.session_id = Some(sid.to_string());
@@ -833,6 +1131,8 @@ mod tests {
                 handoff_chain: None,
                 handoff_return_to: None,
                 chain_id: None,
+                hop_failure_policy: None,
+                hop_retry_max: None,
             }),
         };
         assert_eq!(AgentRouter::handoff_target(&intent), Some("repo-keeper"));
@@ -855,6 +1155,8 @@ mod tests {
                 ]),
             handoff_return_to: None,
                 chain_id: None,
+                hop_failure_policy: None,
+                hop_retry_max: None,
             }),
         };
         let chain = AgentRouter::metadata_handoff_chain(&intent).unwrap();

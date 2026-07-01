@@ -20,6 +20,24 @@ rmng ask --agent swarm-coordinator --session <sid> --auto-continue --max-steps 3
 
 Loop: ask → dispatch executable intent → re-ask final agent with continuation prompt → until `plan.only` or max steps.
 
+## Hop failure policy (Sprint 25)
+
+Set on `plan.only` metadata when emitting `handoff_chain`:
+
+| Field | Values | Default |
+|-------|--------|---------|
+| `hop_failure_policy` | `retry`, `skip`, `abort` | `abort` |
+| `hop_retry_max` | integer ≥ 1 | `2` (when policy is `retry`) |
+
+**Policies:**
+- **abort** — stop chain, set `orchestration.status = failed` (backward compatible).
+- **retry** — retry the same hop up to `hop_retry_max`, then abort.
+- **skip** — record skipped hop, attempt shortcut from current agent to the agent after the failed target (e.g. L4→L3 fails → try L4→L2).
+
+Audit events: `nervous.handoff_chain_policy` (decision), `nervous.handoff_chain_hop` with outcomes `retry` / `skipped` / `failed`.
+
+Session `shared_context.orchestration` gains `hop_decisions[]` and `skipped_hops[]` on recovery paths.
+
 ## Chain failure behavior
 
 Failed hops set `shared_context.orchestration.status = failed` with `failed_hop`, `error`. Audit: `nervous.handoff_chain_hop` outcome `failed`.

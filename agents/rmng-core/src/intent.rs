@@ -32,6 +32,12 @@ pub struct Metadata {
     /// Correlation id for a multi-hop workflow (Sprint 23).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain_id: Option<String>,
+    /// Policy when a chain hop fails: `retry`, `skip`, or `abort` (Sprint 25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hop_failure_policy: Option<String>,
+    /// Max retries per hop when policy is `retry` (Sprint 25).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hop_retry_max: Option<u32>,
 }
 
 /// Internally tagged poly-intent: native tools, MCP proxy, or plan-only reasoning.

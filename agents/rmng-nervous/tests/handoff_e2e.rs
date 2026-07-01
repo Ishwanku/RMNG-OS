@@ -189,6 +189,8 @@ fn build_tool_result_record_captures_mcp_and_metadata() {
             handoff_chain: None,
             handoff_return_to: None,
             chain_id: None,
+            hop_failure_policy: None,
+            hop_retry_max: None,
         }),
     };
     let resp = HandleResponse::failure("mcp unavailable");

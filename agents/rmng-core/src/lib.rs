@@ -9,6 +9,7 @@ pub mod resource_rollup;
 pub mod dispatch;
 pub mod error;
 pub mod intent;
+pub mod orchestration;
 pub mod ipc;
 pub mod permission;
 pub mod registry;
@@ -52,6 +53,9 @@ pub use dispatch::Runtime;
 pub use error::RmngError;
 pub use intent::{
     CoreIntent, Intent, IntentKind, Metadata, ToolRequest, CORE_INTENT_SCHEMA_VERSION,
+};
+pub use orchestration::{
+    parse_hop_failure_policy, HandoffChainOptions, HopFailurePolicy,
 };
 
 /// Parse IPC payload as v2 core intent or fall back to v1 intent envelope.
