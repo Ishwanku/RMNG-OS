@@ -7,7 +7,12 @@ use crate::nervous_audit::log_nervous_event;
 const REPAIR_SUFFIX: &str = r#"
 Your previous response was NOT valid core-intent v2 JSON.
 Return ONLY a single JSON object with top-level "action" (tool.execute, mcp.proxy, or plan.only).
-Include metadata.session_id if a session is active. handoff_chain must be a JSON array of agent ids (not comma string). hop_failure_policy is optional (retry|skip|abort). handoff_return_to is for specialists returning to swarm-coordinator. No markdown fences, no prose."#;
+Include metadata.session_id if a session is active.
+handoff_chain MUST be a JSON array: ["swarm-coordinator","repo-keeper"] — NOT "a,b" and NOT "a -> b".
+handoff_return_to is for specialists returning to swarm-coordinator after tools succeed.
+hop_failure_policy is optional (retry|skip|abort).
+Example chain: {"action":"plan.only","reasoning":"delegate","metadata":{"session_id":"<sid>","handoff_chain":["swarm-coordinator","repo-keeper","runtime-executor"]}}
+No markdown fences, no prose outside JSON."#;
 
 /// Reason once, then auto-retry once on invalid JSON (Sprint 6). Aggregates token usage (Sprint 9).
 pub async fn reason_with_retry(

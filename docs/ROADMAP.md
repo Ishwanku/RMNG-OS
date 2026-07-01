@@ -250,3 +250,8 @@ code ~/dev/projects/RMNG-OS
 - Integration tests for `rmng health --json` and `rmngd --validate`
 - Configurable systemd paths via `rmngd.service.in` + `RMNG_PROJECT_ROOT`
 - Install script skips restart on validate ERROR; docs sync
+### Sprint 30 — Live LLM chain reliability ✅
+- Orchestration prompt tuning: few-shot examples, error recovery hints, provider-specific guidance
+- Parser hardening: semicolon chains, empty array filter, invalid chain drop + warn
+- Live chain E2E tests (Groq, Grok, Ollama) with strict HandoffChain assertion
+- Chain emission matrix tests; [live-llm-orchestration.md](integrations/live-llm-orchestration.md)

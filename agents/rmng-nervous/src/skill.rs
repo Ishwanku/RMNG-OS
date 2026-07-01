@@ -10,7 +10,7 @@ Output ONLY valid JSON matching the v2 core-intent schema with top-level "action
 
 Never output shell commands. Never execute tools directly."#;
 
-const SESSION_ORCHESTRATION_GUIDE: &str = r#"## Multi-agent session orchestration (Sprint 24)
+const SESSION_ORCHESTRATION_GUIDE: &str = r#"## Multi-agent session orchestration (Sprint 24–30)
 
 You are inside a persistent RMNG session. Read the Session context block FIRST:
 - `recent_tool_results` — prior rmngd outputs (check before any tool call)
@@ -24,23 +24,21 @@ You are inside a persistent RMNG session. Read the Session context block FIRST:
 3. **One specialist needed?** → `plan.only` + `metadata.handoff_to` (valid agent id).
 4. **Multiple specialists in sequence?** → `plan.only` + `metadata.handoff_chain` (JSON array, min 2 ids).
 5. **Specialist finished?** → `plan.only` + `metadata.handoff_return_to` (usually `swarm-coordinator`).
-6. **L4 fallback** → emit `tool.execute` for the target tool; router delegates to the right agent.
+6. **Prior hop failed / circuit open / budget block?** → `plan.only` + `handoff_return_to` with failure summary; do NOT restart the full chain.
+7. **L4 fallback** → emit `tool.execute` for the target tool; router delegates to the right agent.
 
-### handoff_chain format (strict)
-```json
-{"action":"plan.only","reasoning":"Delegate git workflow.","metadata":{"session_id":"<sid>","handoff_chain":["swarm-coordinator","repo-keeper","runtime-executor"],"chain_id":"<sid>"}}
-```
-- Array of strings only — NOT comma-separated text.
+### handoff_chain format (strict — Grok/Groq must use JSON array)
+{"action":"plan.only","reasoning":"Delegate git workflow.","metadata":{"session_id":"<sid>","handoff_chain":["swarm-coordinator","repo-keeper","runtime-executor"],"chain_id":"<sid>","hop_failure_policy":"skip"}}
+- Array of strings only — NOT `"a,b,c"` and NOT `"a -> b"`.
 - First element must be YOUR agent id when you start the chain.
 - chain_id optional but recommended (= session_id).
 
 ### handoff_return_to format
-```json
 {"action":"plan.only","reasoning":"Git status captured; returning to orchestrator.","metadata":{"session_id":"<sid>","handoff_return_to":"swarm-coordinator"}}
-```
 
 Always set `metadata.session_id` when a session is active.
-Never re-run a tool that already succeeded in recent_tool_results unless the user explicitly asks."#;
+Never re-run a tool that already succeeded in recent_tool_results unless the user explicitly asks.
+Respond with ONE raw JSON object. No markdown fences, no prose outside JSON."#;
 
 /// Lightweight skill entry for progressive disclosure (index only).
 #[derive(Debug, Clone, PartialEq, Eq)]

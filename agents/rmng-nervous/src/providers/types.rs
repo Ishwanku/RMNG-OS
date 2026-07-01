@@ -240,6 +240,8 @@ pub fn parse_agent_id_list(raw: &str) -> Vec<String> {
         "->"
     } else if trimmed.contains('→') {
         "→"
+    } else if trimmed.contains(';') {
+        ";"
     } else if trimmed.contains('|') {
         "|"
     } else {
@@ -253,9 +255,23 @@ pub fn parse_agent_id_list(raw: &str) -> Vec<String> {
         .collect()
 }
 
+fn filter_agent_array(arr: Vec<Value>) -> Vec<Value> {
+    arr.into_iter()
+        .filter_map(|v| {
+            let s = v.as_str()?.trim();
+            if s.is_empty() {
+                None
+            } else {
+                Some(Value::String(s.to_string()))
+            }
+        })
+        .collect()
+}
+
 fn normalize_handoff_chain_value(chain: Value) -> Option<Value> {
     match chain {
         Value::Array(mut arr) => {
+            arr = filter_agent_array(arr);
             if arr.len() == 1 {
                 if let Some(s) = arr.pop().and_then(|v| v.as_str().map(str::to_string)) {
                     let ids = parse_agent_id_list(&s);
@@ -351,8 +367,17 @@ pub fn normalize_intent_value(value: &mut Value) {
         meta.entry(key.to_string()).or_insert(v);
     }
     if let Some(chain) = meta.get("handoff_chain").cloned() {
-        if let Some(normalized) = normalize_handoff_chain_value(chain) {
-            meta.insert("handoff_chain".into(), normalized);
+        match normalize_handoff_chain_value(chain.clone()) {
+            Some(normalized) => {
+                meta.insert("handoff_chain".into(), normalized);
+            }
+            None => {
+                tracing::warn!(
+                    handoff_chain = %chain,
+                    "dropped invalid handoff_chain (need >= 2 agent ids after normalization)"
+                );
+                meta.remove("handoff_chain");
+            }
         }
     }
     for key in ["handoff_to", "handoff_return_to", "handoff_from", "chain_id"] {

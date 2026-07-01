@@ -1,4 +1,6 @@
-# Multi-hop orchestration usage (Sprint 23–24)
+# Multi-hop orchestration usage (Sprint 23–30)
+
+Live LLM workflows: [live-llm-orchestration.md](live-llm-orchestration.md) · model quirks: [live-llm-chain-quirks.md](live-llm-chain-quirks.md)
 
 ## LLM metadata fields
 
