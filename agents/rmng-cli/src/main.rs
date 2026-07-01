@@ -479,7 +479,7 @@ async fn main() {
                             for id in ids {
                                 match store.load(&id) {
                                     Ok(session) => {
-                                        let status = session.freshness_label(7);
+                                        let status = session.lifecycle_label();
                                         println!(
                                             "{id}  {status}  updated={}  handoffs={}",
                                             session.updated_at.to_rfc3339(),
@@ -603,7 +603,7 @@ async fn main() {
         Commands::Status => {
             let cfg = RmngConfig::load();
             let connector = NervousConnector::from_config(cfg);
-            println!("rmng 0.1.0 — Sprint 4b (shared context write-back + multi-hop handoffs)");
+            println!("rmng 0.1.0 — Sprint 4c (live LLM orchestration + MCP E2E)");
             if let Ok(reg) = IntegrationRegistry::load() {
                 println!(
                     "integrations: {} manifests, {} tools",

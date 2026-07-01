@@ -1,5 +1,5 @@
 use crate::agent::AgentDefinition;
-use rmng_core::{CoreIntent, Metadata};
+use rmng_core::{AgentSession, CoreIntent, Metadata};
 
 fn skill_metadata(skill_name: Option<&str>) -> Option<Metadata> {
     skill_name.map(|name| Metadata {
@@ -10,16 +10,54 @@ fn skill_metadata(skill_name: Option<&str>) -> Option<Metadata> {
     })
 }
 
+fn session_metadata(
+    skill_name: Option<&str>,
+    session: Option<&AgentSession>,
+) -> Option<Metadata> {
+    let mut meta = skill_metadata(skill_name).unwrap_or(Metadata {
+        skill_name: None,
+        session_id: None,
+        handoff_from: None,
+        trace_id: None,
+    });
+    if let Some(sess) = session {
+        meta.session_id = Some(sess.id.clone());
+        meta.trace_id = Some(sess.id.clone());
+    }
+    Some(meta)
+}
+
 /// Nervous-system stub when `LlmProvider::None` — returns valid v2 `CoreIntent` JSON shapes.
 pub fn mock_core_intent(
     prompt: &str,
     skill_name: Option<&str>,
     skill_instructions: Option<&str>,
     agent: Option<&AgentDefinition>,
+    session: Option<&AgentSession>,
 ) -> CoreIntent {
-    let metadata = skill_metadata(skill_name);
+    let metadata = session_metadata(skill_name, session);
     let lower = prompt.to_lowercase();
     let skill_lower = skill_instructions.unwrap_or("").to_lowercase();
+
+    // Session-aware: summarize prior tool results instead of re-executing
+    if let Some(sess) = session {
+        let summary = sess.tool_results_summary(3);
+        if summary != "(no prior tool results)"
+            && (lower.contains("summarize")
+                || lower.contains("previous")
+                || lower.contains("prior")
+                || lower.contains("complete")
+                || lower.contains("done"))
+        {
+            return CoreIntent::PlanOnly {
+                reasoning: format!(
+                    "Session {id}: synthesizing prior results.\n{summary}\nUser request: {prompt}",
+                    id = sess.id
+                ),
+                metadata,
+            };
+        }
+    }
 
     // Agent-scoped routing hints
     if let Some(a) = agent {
@@ -206,7 +244,7 @@ mod tests {
 
     #[test]
     fn mock_git_status_with_skill() {
-        let intent = mock_core_intent("check git status", Some("git-workflow"), None, None);
+        let intent = mock_core_intent("check git status", Some("git-workflow"), None, None, None);
         assert!(matches!(intent, CoreIntent::ToolExecute { .. }));
     }
 
@@ -217,7 +255,8 @@ mod tests {
         )
         .unwrap();
         let agent = reg.get("repo-keeper").unwrap();
-        let intent = mock_core_intent("check git status", Some("git-workflow"), None, Some(agent));
+        let intent =
+            mock_core_intent("check git status", Some("git-workflow"), None, Some(agent), None);
         match intent {
             CoreIntent::ToolExecute { target, .. } => assert_eq!(target, "git.status"),
             _ => panic!("expected tool.execute"),
@@ -226,7 +265,41 @@ mod tests {
 
     #[test]
     fn mock_plan_only_default() {
-        let intent = mock_core_intent("hello world", None, None, None);
+        let intent = mock_core_intent("hello world", None, None, None, None);
         assert!(matches!(intent, CoreIntent::PlanOnly { .. }));
+    }
+
+    #[test]
+    fn mock_session_summarizes_prior_tool_results() {
+        use rmng_core::{SessionStore, ToolResultRecord};
+        let dir = std::env::temp_dir().join(format!("rmng-mock-ctx-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let mut session = store.create().unwrap();
+        store
+            .record_tool_result(
+                &mut session,
+                ToolResultRecord {
+                    timestamp: chrono::Utc::now(),
+                    tool: "git.status".into(),
+                    parameters: serde_json::json!({}),
+                    output: "clean".into(),
+                    success: true,
+                    exit_code: Some(0),
+                    handoff_from: None,
+                },
+            )
+            .unwrap();
+        let intent = mock_core_intent(
+            "summarize previous results",
+            None,
+            None,
+            None,
+            Some(&session),
+        );
+        match intent {
+            CoreIntent::PlanOnly { reasoning, .. } => assert!(reasoning.contains("git.status")),
+            _ => panic!("expected plan.only"),
+        }
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

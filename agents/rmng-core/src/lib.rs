@@ -19,8 +19,9 @@ pub use allowlist::{McpAllowlist, McpServerConfig};
 pub use audit::{AuditEntry, AuditLog, AuditTrack};
 pub use registry::{IntegrationManifest, IntegrationRegistry, ToolManifest};
 pub use session::{
-    build_tool_result_record, persist_dispatch_to_session, AgentSession, HandoffRecord,
-    SessionError, SessionStore, ToolResultRecord, MAX_TOOL_OUTPUT_LEN,
+    build_tool_result_record, persist_dispatch_to_session, session_ttl_days, AgentSession,
+    HandoffRecord, SessionError, SessionLoadOptions, SessionStore, ToolResultRecord,
+    DEFAULT_SESSION_TTL_DAYS, MAX_TOOL_OUTPUT_LEN,
 };
 pub use validator::IntentValidator;
 pub use config::{LlmConfig, LlmProvider, RmngConfig};

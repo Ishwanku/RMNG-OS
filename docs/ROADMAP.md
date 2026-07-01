@@ -144,7 +144,8 @@ Multi-agent routing, layer model, session store, swarm handoffs.
 | **Sprint 3** | ✅ | L1–L4 layer model, session store, layer-aware router, ADR-017 |
 | **Sprint 4a** | ✅ | Shared context in prompts, `rmng handoff`, daemon E2E tests, light ingestion |
 | **Sprint 4b** | ✅ | Tool result write-back to `shared_context`, multi-hop `--chain` handoffs, `session prune`, collaboration E2E |
-| **Sprint 4c** | Planned | Live LLM orchestration, MCP ingestion E2E, automated session TTL |
+| **Sprint 4c** | ✅ | Live LLM session orchestration prompts, Ollama guidance, MCP `search_issues` E2E, session TTL on load |
+| **Sprint 5** | Planned | Stabilization, richer ingestion, autonomous handoff selection |
 
 See [ADR-017](decisions/ADR-017-multi-level-agent-architecture.md).
 

@@ -5,6 +5,13 @@ use std::time::Duration;
 const DEFAULT_URL: &str = "http://127.0.0.1:11434";
 const DEFAULT_MODEL: &str = "llama3.2";
 
+#[derive(Debug, Clone, Default)]
+pub struct LlmReasonContext<'a> {
+    pub session_id: Option<&'a str>,
+    pub agent_id: Option<&'a str>,
+    pub skill_name: Option<&'a str>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum NervousError {
     #[error("http error: {0}")]
@@ -61,13 +68,39 @@ impl OllamaAdapter {
     pub async fn reason_core(
         &self,
         assembled_prompt: &str,
-        skill_name: Option<&str>,
+        ctx: &LlmReasonContext<'_>,
     ) -> Result<CoreIntent, NervousError> {
-        let skill_note = skill_name
-            .map(|n| format!("\nInclude metadata.skill_name = \"{n}\" when appropriate."))
-            .unwrap_or_default();
+        let mut hints = Vec::new();
+        if let Some(name) = ctx.skill_name {
+            hints.push(format!(
+                "Include metadata.skill_name = \"{name}\" when appropriate."
+            ));
+        }
+        if let Some(sid) = ctx.session_id {
+            hints.push(format!(
+                "REQUIRED: include metadata.session_id = \"{sid}\" on the intent."
+            ));
+        }
+        if let Some(agent) = ctx.agent_id {
+            hints.push(format!(
+                "You are agent \"{agent}\". Only emit tools listed in your Allowed tools section."
+            ));
+        }
+        let hint_block = if hints.is_empty() {
+            String::new()
+        } else {
+            format!("\n{}\n", hints.join("\n"))
+        };
+
+        let examples = r#"
+Example intents (use exactly one):
+{"action":"tool.execute","target":"git.status","parameters":{},"metadata":{"session_id":"<sid>"}}
+{"action":"mcp.proxy","mcp_server":"github","mcp_tool":"search_issues","mcp_args":{"query":"repo:Ishwanku/RMNG-OS is:open"},"metadata":{"session_id":"<sid>"}}
+{"action":"plan.only","reasoning":"Task complete. Summarize prior tool results.","metadata":{"session_id":"<sid>"}}
+"#;
+
         let prompt = format!(
-            "{assembled_prompt}{skill_note}\n\nRespond with a single JSON object for core-intent v2."
+            "{assembled_prompt}{hint_block}{examples}\nRespond with a single JSON object for core-intent v2."
         );
         let url = format!("{}/api/generate", self.base_url.trim_end_matches('/'));
         let body = GenerateRequest {

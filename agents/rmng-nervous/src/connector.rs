@@ -66,12 +66,19 @@ impl NervousConnector {
     ) -> Result<CoreIntent, ConnectorError> {
         let assembled = assemble_prompt_full(agent, extra_skills, skill, session, prompt);
 
+        let llm_ctx = crate::ollama::LlmReasonContext {
+            session_id: session.map(|s| s.id.as_str()),
+            agent_id: agent.map(|a| a.id.as_str()),
+            skill_name,
+        };
+
         match self.config.llm.llm_provider {
             LlmProvider::None => Ok(mock_core_intent(
                 prompt,
                 skill_name,
                 skill.map(|s| s.instructions.as_str()),
                 agent,
+                session,
             )),
             LlmProvider::Ollama => {
                 let url = self
@@ -82,7 +89,7 @@ impl NervousConnector {
                     .unwrap_or("http://127.0.0.1:11434");
                 let model = self.config.llm.model.as_deref().unwrap_or("llama3.2");
                 let adapter = OllamaAdapter::new(url, model);
-                Ok(adapter.reason_core(&assembled, skill_name).await?)
+                Ok(adapter.reason_core(&assembled, &llm_ctx).await?)
             }
             LlmProvider::OpenAi | LlmProvider::Anthropic | LlmProvider::Custom => {
                 Err(ConnectorError::NotImplemented(format!(

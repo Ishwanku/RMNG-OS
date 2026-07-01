@@ -82,3 +82,43 @@ rmng session prune --older-than-days 30
 ```
 
 When `--session` is set, tool results from `rmngd` are automatically appended to the session JSON so the next agent hop can reason over prior execution output.
+
+## Live LLM orchestration (Sprint 4c)
+
+Configure Ollama in `~/.rmng/config.toml`:
+
+```toml
+[llm]
+llm_provider = "ollama"
+endpoint_url = "http://127.0.0.1:11434"
+model = "llama3.2"
+```
+
+With a live provider, the nervous system injects **session orchestration guidance** plus `recent_tool_results` and handoff history into every `--session` prompt. The LLM is instructed to:
+
+1. Read prior tool results before acting
+2. Emit `plan.only` when the task is complete
+3. Emit `tool.execute` / `mcp.proxy` for the next step (within agent allowlist)
+4. Include `metadata.session_id` on every intent
+
+### Multi-agent workflow example (live LLM)
+
+```bash
+export RMNG_PROJECT_ROOT=~/dev/projects/RMNG-OS
+SID=$(rmng session new | grep '^session:' | awk '{print $2}')
+
+# L4 orchestrator delegates git work to L3
+rmng ask --agent swarm-coordinator "check git status" --session "$SID"
+
+# L3 executes; result written to shared_context.tool_results
+rmng session show "$SID"
+
+# Research via MCP (requires github MCP in allowlist + rmngd)
+rmng handoff --session "$SID" --from swarm-coordinator --to research-curator \
+  --reason "research" "search open issues in RMNG-OS"
+
+# Follow-up — LLM sees prior MCP output in session context
+rmng ask --agent research-curator "summarize previous search results" --session "$SID" --dry-run
+```
+
+Session lifecycle: `active` (<1h), `idle` (<7d), `stale` (≥7d). Expired sessions (default 90d TTL) are removed on load; override with `RMNG_SESSION_TTL_DAYS=0` to disable.

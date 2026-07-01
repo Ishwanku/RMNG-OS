@@ -166,6 +166,32 @@ mod tests {
         assert!(matches!(gate.evaluate(&intent), PermissionVerdict::Deny(_)));
     }
 
+    fn test_gate_with_github_mcp() -> PermissionGate {
+        let mut servers = HashMap::new();
+        servers.insert(
+            "github".into(),
+            McpServerConfig {
+                enabled: true,
+                command: "npx".into(),
+                args: vec!["@github/github-mcp-server".into()],
+                allowed_tools: vec!["search_issues".into(), "get_issue".into()],
+            },
+        );
+        PermissionGate::from_registry(&fixture_registry()).with_mcp_allowlist(McpAllowlist { servers })
+    }
+
+    #[test]
+    fn allows_mcp_github_search_issues() {
+        let gate = test_gate_with_github_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "github".into(),
+            mcp_tool: "search_issues".into(),
+            mcp_args: serde_json::json!({"query": "repo:Ishwanku/RMNG-OS is:open"}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
+    }
+
     #[test]
     fn allows_mcp_git_log() {
         let gate = test_gate_with_mcp();

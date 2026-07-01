@@ -9,6 +9,21 @@ Output ONLY valid JSON matching the v2 core-intent schema with top-level "action
 
 Never output shell commands. Never execute tools directly."#;
 
+const SESSION_ORCHESTRATION_GUIDE: &str = r#"## Multi-agent session orchestration
+
+You are operating inside a persistent RMNG session. The Session context block contains:
+- `recent_tool_results` — outputs from prior rmngd executions (read these first)
+- `recent_handoffs` — which agents already worked on this task
+- `shared_context` — operator-provided keys and values
+
+Decision rules:
+1. **Continue** — if more work is needed within your allowed tools, emit `tool.execute` or `mcp.proxy`.
+2. **Complete** — if prior results satisfy the request, emit `plan.only` with a concise summary.
+3. **Delegate (L4 only)** — emit `tool.execute` for the target tool; the router hands off to the right L3/L2 agent.
+
+Always include `metadata.session_id` matching the session when a session is active.
+Never repeat a tool call if `recent_tool_results` already contains a successful result for the same tool unless the user explicitly asks to re-run."#;
+
 /// Lightweight skill entry for progressive disclosure (index only).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkillSummary {
@@ -191,10 +206,10 @@ pub fn assemble_prompt_full(
     }
 
     if let Some(sess) = session {
+        parts.push(SESSION_ORCHESTRATION_GUIDE.to_string());
         let ctx = sess.prompt_context();
         if !ctx.is_empty() {
-            parts.push(format!("## Session context
-{ctx}"));
+            parts.push(format!("## Session context\n{ctx}"));
         }
     }
 
@@ -267,6 +282,7 @@ Do the thing.
         let prompt = assemble_prompt_full(None, &[], None, Some(&session), "test");
         assert!(prompt.contains("hello"));
         assert!(prompt.contains("Session context"));
+        assert!(prompt.contains("Multi-agent session orchestration"));
         let _ = std::fs::remove_dir_all(dir);
     }
 

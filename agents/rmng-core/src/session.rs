@@ -69,10 +69,27 @@ pub struct HandoffRecord {
     pub prompt: Option<String>,
 }
 
+/// Default session TTL in days (ADR-018). Override with `RMNG_SESSION_TTL_DAYS`.
+pub const DEFAULT_SESSION_TTL_DAYS: u32 = 90;
+
+#[derive(Debug, Clone, Copy)]
+pub struct SessionLoadOptions {
+    /// When true, delete and reject sessions older than TTL on load.
+    pub enforce_ttl: bool,
+}
+
+impl Default for SessionLoadOptions {
+    fn default() -> Self {
+        Self { enforce_ttl: true }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
     #[error("session not found: {0}")]
     NotFound(String),
+    #[error("session expired (TTL): {0}")]
+    Expired(String),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("parse error: {0}")]
@@ -120,12 +137,31 @@ impl SessionStore {
     }
 
     pub fn load(&self, id: &str) -> Result<AgentSession, SessionError> {
+        self.load_with_options(id, SessionLoadOptions::default())
+    }
+
+    pub fn load_with_options(
+        &self,
+        id: &str,
+        options: SessionLoadOptions,
+    ) -> Result<AgentSession, SessionError> {
         let path = self.path_for(id);
         if !path.is_file() {
             return Err(SessionError::NotFound(id.to_string()));
         }
         let raw = std::fs::read_to_string(&path)?;
-        Ok(serde_json::from_str(&raw)?)
+        let mut session: AgentSession = serde_json::from_str(&raw)?;
+        if options.enforce_ttl {
+            if let Some(ttl_days) = session_ttl_days() {
+                let cutoff = Utc::now() - chrono::Duration::days(ttl_days as i64);
+                if session.updated_at < cutoff {
+                    let _ = std::fs::remove_file(&path);
+                    return Err(SessionError::Expired(id.to_string()));
+                }
+            }
+        }
+        session.refresh_lifecycle();
+        Ok(session)
     }
 
     pub fn save(&self, session: &AgentSession) -> Result<(), SessionError> {
@@ -250,6 +286,33 @@ impl SessionStore {
 
 
 impl AgentSession {
+    /// Mark session as actively processing a prompt (called on ask/handoff).
+    pub fn mark_active(&mut self, prompt: &str) {
+        self.task_state.current_prompt = Some(prompt.to_string());
+        self.task_state.status = "active".into();
+        self.updated_at = Utc::now();
+    }
+
+    /// Update `task_state.status` from `updated_at`: active (<1h), idle (<7d), stale (≥7d).
+    pub fn refresh_lifecycle(&mut self) {
+        let hours = (Utc::now() - self.updated_at).num_hours();
+        self.task_state.status = if hours < 1 {
+            "active".into()
+        } else if hours < 24 * 7 {
+            "idle".into()
+        } else {
+            "stale".into()
+        };
+    }
+
+    /// Lifecycle label for CLI listing (`active` / `idle` / `stale`).
+    pub fn lifecycle_label(&self) -> &str {
+        match self.task_state.status.as_str() {
+            "active" | "idle" | "stale" => &self.task_state.status,
+            _ => "open",
+        }
+    }
+
     /// `active` if updated within `active_within_days`, else `stale`.
     pub fn freshness_label(&self, active_within_days: i64) -> &'static str {
         let cutoff = Utc::now() - chrono::Duration::days(active_within_days);
@@ -260,18 +323,54 @@ impl AgentSession {
         }
     }
 
+    /// Human-readable summary of recent tool results for live LLM prompts.
+    pub fn tool_results_summary(&self, max_entries: usize) -> String {
+        let Some(arr) = self
+            .shared_context
+            .get("tool_results")
+            .and_then(|v| v.as_array())
+        else {
+            return "(no prior tool results)".into();
+        };
+        if arr.is_empty() {
+            return "(no prior tool results)".into();
+        }
+        let tail: Vec<_> = arr.iter().rev().take(max_entries).collect();
+        tail.into_iter()
+            .rev()
+            .map(|entry| {
+                let tool = entry["tool"].as_str().unwrap_or("unknown");
+                let ok = entry["success"].as_bool().unwrap_or(false);
+                let status = if ok { "ok" } else { "failed" };
+                let output = entry["output"].as_str().unwrap_or("");
+                let preview: String = output.chars().take(500).collect();
+                format!("- {tool} [{status}]: {preview}")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     /// Format shared context + recent handoffs for nervous-system prompt injection.
     pub fn prompt_context(&self) -> String {
         let mut parts = Vec::new();
         parts.push(format!("session_id: {}", self.id));
+        parts.push(format!("lifecycle: {}", self.lifecycle_label()));
         if let Some(prompt) = &self.task_state.current_prompt {
             parts.push(format!("current_task: {prompt}"));
         }
-        if !self.shared_context.is_empty() {
-            let ctx = serde_json::to_string_pretty(&self.shared_context)
-                .unwrap_or_else(|_| "{}".into());
-            parts.push(format!("shared_context:
-{ctx}"));
+        let tool_summary = self.tool_results_summary(5);
+        if tool_summary != "(no prior tool results)" {
+            parts.push(format!("recent_tool_results:\n{tool_summary}"));
+        }
+        let other_ctx: HashMap<_, _> = self
+            .shared_context
+            .iter()
+            .filter(|(k, _)| k.as_str() != "tool_results")
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        if !other_ctx.is_empty() {
+            let ctx = serde_json::to_string_pretty(&other_ctx).unwrap_or_else(|_| "{}".into());
+            parts.push(format!("shared_context:\n{ctx}"));
         }
         if !self.handoff_history.is_empty() {
             let tail: Vec<_> = self.handoff_history.iter().rev().take(5).collect();
@@ -299,6 +398,21 @@ impl AgentSession {
         }
         parts.join("
 ")
+    }
+}
+
+/// TTL days from `RMNG_SESSION_TTL_DAYS`, or default. Set to `0` to disable expiry on load.
+pub fn session_ttl_days() -> Option<u32> {
+    match std::env::var("RMNG_SESSION_TTL_DAYS") {
+        Ok(raw) => {
+            let days: u32 = raw.parse().ok()?;
+            if days == 0 {
+                None
+            } else {
+                Some(days)
+            }
+        }
+        Err(_) => Some(DEFAULT_SESSION_TTL_DAYS),
     }
 }
 
@@ -427,6 +541,46 @@ mod tests {
         assert_eq!(removed.len(), 1);
         assert_eq!(removed[0], session.id);
         assert!(store.load(&fresh.id).is_ok());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn ttl_expired_session_removed_on_load() {
+        let dir = std::env::temp_dir().join(format!("rmng-ttl-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let mut session = store.create().expect("create");
+        session.updated_at = Utc::now() - chrono::Duration::days(120);
+        store.save(&session).expect("save old");
+        std::env::set_var("RMNG_SESSION_TTL_DAYS", "90");
+        let err = store.load(&session.id).expect_err("expired");
+        assert!(matches!(err, SessionError::Expired(_)));
+        assert!(store.load(&session.id).is_err());
+        std::env::remove_var("RMNG_SESSION_TTL_DAYS");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn tool_results_summary_formats_for_llm() {
+        let dir = std::env::temp_dir().join(format!("rmng-summary-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let mut session = store.create().expect("create");
+        store
+            .record_tool_result(
+                &mut session,
+                ToolResultRecord {
+                    timestamp: Utc::now(),
+                    tool: "git.status".into(),
+                    parameters: serde_json::json!({}),
+                    output: "On branch main".into(),
+                    success: true,
+                    exit_code: Some(0),
+                    handoff_from: None,
+                },
+            )
+            .expect("record");
+        let summary = session.tool_results_summary(3);
+        assert!(summary.contains("git.status"));
+        assert!(summary.contains("On branch main"));
         let _ = std::fs::remove_dir_all(dir);
     }
 

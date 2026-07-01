@@ -352,7 +352,7 @@ impl AgentRouter {
             .sessions
             .load(session_id)
             .map_err(|e| RouterError::Session(e.to_string()))?;
-        session.task_state.current_prompt = Some(prompt.to_string());
+        session.mark_active(prompt);
         self.sessions
             .set_active_agent(
                 &mut session,
