@@ -1,0 +1,8 @@
+{
+  "action": "tool.execute",
+  "target": "git.diff",
+  "parameters": {},
+  "metadata": {
+    "skill_name": "git-workflow"
+  }
+}

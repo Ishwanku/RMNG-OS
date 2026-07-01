@@ -14,6 +14,8 @@ Central index for all project documentation. Start here when onboarding or shari
 | [PLAN-AGENTS-MCP-SKILLS.md](PLAN-AGENTS-MCP-SKILLS.md) | Architecture | Agents, skills, MCP adoption plan |
 | [setup.md](setup.md) | Operators | WSL environment install guide |
 | [daily-workflow.md](daily-workflow.md) | Developers | Day-to-day commands |
+| [INTEGRATION-STRATEGY.md](INTEGRATION-STRATEGY.md) | Maintainers | **Future repo integration governance** |
+| [integrations/](integrations/) | Maintainers | Per-repo evaluation docs |
 | [experiments/phase3-validation-20260630.md](experiments/phase3-validation-20260630.md) | Kernel dev | Phase 3 RMNG identity validation |
 | [DECISIONS.md](DECISIONS.md) | Maintainers | Architecture decision records |
 
@@ -34,12 +36,20 @@ Central index for all project documentation. Start here when onboarding or shari
 2. [daily-workflow.md](daily-workflow.md)
 3. [ARCHITECTURE.md](ARCHITECTURE.md) → Layer 1
 
-### AI / agents (future)
+### AI / agents
 1. [VISION.md](VISION.md)
 2. [REQUIREMENTS.md](REQUIREMENTS.md) → Layer 4–5
 3. [ARCHITECTURE.md](ARCHITECTURE.md) → Agents & integrations
-4. [../agents/README.md](../agents/README.md)
-5. [../integrations/README.md](../integrations/README.md)
+4. [INTEGRATION-STRATEGY.md](INTEGRATION-STRATEGY.md) → Adding OSS repos safely
+5. [../agents/README.md](../agents/README.md)
+6. [../integrations/README.md](../integrations/README.md)
+7. [../skills/INDEX.md](../skills/INDEX.md)
+
+### Adding a new open-source repo
+1. Copy [integrations/TEMPLATE.md](integrations/TEMPLATE.md) → `integrations/<name>.md`
+2. Score against [INTEGRATION-STRATEGY.md](INTEGRATION-STRATEGY.md) §3
+3. Implement on the assigned track (1–4)
+4. Register MCP (Track 2): `../scripts/register-mcp-tool.sh`
 
 ## Repository layout
 

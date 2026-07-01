@@ -3,11 +3,20 @@ use serde_json::{json, Value};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 use tokio::time::timeout;
 
-const CALL_TIMEOUT: Duration = Duration::from_secs(60);
+const DEFAULT_CALL_TIMEOUT: Duration = Duration::from_secs(60);
+const KILL_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 const PROTOCOL_VERSION: &str = "2024-11-05";
+
+fn call_timeout() -> Duration {
+    std::env::var("RMNG_MCP_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(DEFAULT_CALL_TIMEOUT)
+}
 
 /// Map RMNG allowlist tool ids (e.g. `git.log`) to MCP wire names (e.g. `git_log`).
 pub fn wire_tool_name(allowlist_name: &str) -> String {
@@ -40,15 +49,34 @@ pub async fn call_tool(
         .take()
         .ok_or_else(|| McpError::Protocol("missing stdout".into()))?;
 
-    let result = timeout(
-        CALL_TIMEOUT,
+    let call_result = timeout(
+        call_timeout(),
         session_call(stdin, stdout, &wire_name, tool_args),
     )
-    .await
-    .map_err(|_| McpError::Timeout(format!("mcp call {tool_name}")))?;
+    .await;
 
+    match call_result {
+        Ok(Ok(output)) => {
+            cleanup_child(&mut child).await;
+            Ok(output)
+        }
+        Ok(Err(e)) => {
+            cleanup_child(&mut child).await;
+            Err(e)
+        }
+        Err(_) => {
+            cleanup_child(&mut child).await;
+            Err(McpError::Timeout(format!(
+                "mcp call {tool_name} exceeded {}s",
+                call_timeout().as_secs()
+            )))
+        }
+    }
+}
+
+async fn cleanup_child(child: &mut Child) {
     let _ = child.kill().await;
-    result
+    let _ = timeout(KILL_WAIT_TIMEOUT, child.wait()).await;
 }
 
 async fn session_call(

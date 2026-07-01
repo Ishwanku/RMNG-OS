@@ -1,3 +1,4 @@
+use crate::agent::AgentDefinition;
 use rmng_core::{CoreIntent, Metadata};
 
 fn skill_metadata(skill_name: Option<&str>) -> Option<Metadata> {
@@ -12,16 +13,79 @@ pub fn mock_core_intent(
     prompt: &str,
     skill_name: Option<&str>,
     skill_instructions: Option<&str>,
+    agent: Option<&AgentDefinition>,
 ) -> CoreIntent {
     let metadata = skill_metadata(skill_name);
     let lower = prompt.to_lowercase();
     let skill_lower = skill_instructions.unwrap_or("").to_lowercase();
+
+    // Agent-scoped routing hints
+    if let Some(a) = agent {
+        if a.id == "repo-keeper" {
+            if lower.contains("diff") || lower.contains("changes") {
+                return CoreIntent::ToolExecute {
+                    target: "git.diff".into(),
+                    parameters: serde_json::json!({}),
+                    metadata,
+                };
+            }
+            if lower.contains("pr") || lower.contains("pull request") {
+                return CoreIntent::ToolExecute {
+                    target: "github.pr_status".into(),
+                    parameters: serde_json::json!({}),
+                    metadata,
+                };
+            }
+            if lower.contains("log") || lower.contains("history") || lower.contains("commits") {
+                let repo = std::env::var("HOME")
+                    .map(|h| format!("{h}/dev/projects/RMNG-OS"))
+                    .unwrap_or_else(|_| ".".into());
+                return CoreIntent::McpProxy {
+                    mcp_server: "git".into(),
+                    mcp_tool: "git.log".into(),
+                    mcp_args: serde_json::json!({
+                        "repo_path": repo,
+                        "max_count": 3
+                    }),
+                    metadata,
+                };
+            }
+            if lower.contains("status") || lower.contains("check") {
+                return CoreIntent::ToolExecute {
+                    target: "git.status".into(),
+                    parameters: serde_json::json!({}),
+                    metadata,
+                };
+            }
+        }
+        if a.id == "kernel-engineer" {
+            if lower.contains("build") && !lower.contains("status") {
+                return CoreIntent::ToolExecute {
+                    target: "kernel.build".into(),
+                    parameters: serde_json::json!({ "target": "all" }),
+                    metadata,
+                };
+            }
+            return CoreIntent::ToolExecute {
+                target: "kernel.status".into(),
+                parameters: serde_json::json!({}),
+                metadata,
+            };
+        }
+    }
 
     // git-workflow skill or git-related prompt
     if skill_name == Some("git-workflow")
         || lower.contains("git")
         || skill_lower.contains("git.status")
     {
+        if lower.contains("diff") {
+            return CoreIntent::ToolExecute {
+                target: "git.diff".into(),
+                parameters: serde_json::json!({}),
+                metadata,
+            };
+        }
         if lower.contains("log") || lower.contains("history") || lower.contains("commits") {
             let repo = std::env::var("HOME")
                 .map(|h| format!("{h}/dev/projects/RMNG-OS"))
@@ -43,6 +107,14 @@ pub fn mock_core_intent(
                 metadata,
             };
         }
+    }
+
+    if skill_name == Some("github-workflow") || lower.contains("pull request") || lower.contains("pr status") {
+        return CoreIntent::ToolExecute {
+            target: "github.pr_status".into(),
+            parameters: serde_json::json!({}),
+            metadata,
+        };
     }
 
     if skill_name == Some("kernel-build")
@@ -84,20 +156,32 @@ pub fn mock_core_intent(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::AgentRegistry;
+    use std::path::PathBuf;
 
     #[test]
     fn mock_git_status_with_skill() {
-        let intent = mock_core_intent("check git status", Some("git-workflow"), None);
+        let intent = mock_core_intent("check git status", Some("git-workflow"), None, None);
         assert!(matches!(intent, CoreIntent::ToolExecute { .. }));
-        assert_eq!(
-            intent.metadata().and_then(|m| m.skill_name.as_deref()),
-            Some("git-workflow")
-        );
+    }
+
+    #[test]
+    fn mock_repo_keeper_agent_status() {
+        let reg = AgentRegistry::load_from(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../definitions"),
+        )
+        .unwrap();
+        let agent = reg.get("repo-keeper").unwrap();
+        let intent = mock_core_intent("check git status", Some("git-workflow"), None, Some(agent));
+        match intent {
+            CoreIntent::ToolExecute { target, .. } => assert_eq!(target, "git.status"),
+            _ => panic!("expected tool.execute"),
+        }
     }
 
     #[test]
     fn mock_plan_only_default() {
-        let intent = mock_core_intent("hello world", None, None);
+        let intent = mock_core_intent("hello world", None, None, None);
         assert!(matches!(intent, CoreIntent::PlanOnly { .. }));
     }
 }

@@ -1,6 +1,7 @@
+use crate::agent::AgentDefinition;
 use crate::mock::mock_core_intent;
 use crate::ollama::OllamaAdapter;
-use crate::skill::{assemble_prompt, AgentSkill};
+use crate::skill::{assemble_prompt_with_agent, AgentSkill};
 use rmng_core::{CoreIntent, LlmProvider, RmngConfig};
 
 #[derive(Debug, thiserror::Error)]
@@ -35,13 +36,27 @@ impl NervousConnector {
         skill_name: Option<&str>,
         skill: Option<&AgentSkill>,
     ) -> Result<CoreIntent, ConnectorError> {
-        let _assembled = assemble_prompt(skill, prompt);
+        self.reason_core_with_agent(prompt, None, skill_name, skill, &[])
+            .await
+    }
+
+    /// Agent-aware reasoning with narrowed tool context in the prompt.
+    pub async fn reason_core_with_agent(
+        &self,
+        prompt: &str,
+        agent: Option<&AgentDefinition>,
+        skill_name: Option<&str>,
+        skill: Option<&AgentSkill>,
+        extra_skills: &[AgentSkill],
+    ) -> Result<CoreIntent, ConnectorError> {
+        let assembled = assemble_prompt_with_agent(agent, extra_skills, skill, prompt);
 
         match self.config.llm.llm_provider {
             LlmProvider::None => Ok(mock_core_intent(
                 prompt,
                 skill_name,
                 skill.map(|s| s.instructions.as_str()),
+                agent,
             )),
             LlmProvider::Ollama => {
                 let url = self
@@ -52,7 +67,7 @@ impl NervousConnector {
                     .unwrap_or("http://127.0.0.1:11434");
                 let model = self.config.llm.model.as_deref().unwrap_or("llama3.2");
                 let adapter = OllamaAdapter::new(url, model);
-                Ok(adapter.reason_core(&_assembled, skill_name).await?)
+                Ok(adapter.reason_core(&assembled, skill_name).await?)
             }
             LlmProvider::OpenAi | LlmProvider::Anthropic | LlmProvider::Custom => {
                 Err(ConnectorError::NotImplemented(format!(

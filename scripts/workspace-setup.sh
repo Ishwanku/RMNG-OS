@@ -7,8 +7,17 @@ ROOT="$(cd "$(dirname "$SCRIPT")/.." && pwd)"
 
 echo "=== RMNG-OS workspace setup ==="
 
-# Standard directories
-mkdir -p "$HOME/dev/kernel" "$HOME/build/kernel" "$HOME/scripts" "$HOME/dotfiles"
+# Standard directories (see docs/setup.md)
+mkdir -p \
+  "$HOME/dev/projects" \
+  "$HOME/dev/kernel" \
+  "$HOME/dev/tools" \
+  "$HOME/build/kernel" \
+  "$HOME/build/out" \
+  "$HOME/scripts" \
+  "$HOME/src" \
+  "$HOME/dotfiles" \
+  "$HOME/.config/rmng"
 
 # Symlink kernel-env.sh into ~/scripts
 ln -sf "$ROOT/scripts/kernel-env.sh" "$HOME/scripts/kernel-env.sh"
@@ -42,5 +51,13 @@ else
   echo "Kernel source: OK ($(du -sh "$HOME/dev/kernel/linux" | cut -f1))"
 fi
 
+# RMNG runtime home (idempotent)
+if [[ -x "$ROOT/scripts/setup-rmng-home.sh" ]]; then
+  "$ROOT/scripts/setup-rmng-home.sh"
+fi
+
 echo
-echo "Setup complete. Run: ~/scripts/rmng-status.sh"
+echo "Setup complete."
+echo "  Kernel:  ~/scripts/rmng-status.sh"
+echo "  Full:    $ROOT/scripts/dev-environment-setup.sh"
+echo "  Agents:  $ROOT/scripts/install-rmng.sh"

@@ -1,0 +1,27 @@
+# --- RMNG-OS development (append to ~/.bashrc) ---
+export RMNG_PROJECT_ROOT="${HOME}/dev/projects/RMNG-OS"
+export RMNG_HOME="${HOME}/.rmng"
+export PATH="${HOME}/.cargo/bin:${PATH}"
+
+# Kernel build (if kernel-env not already sourced)
+alias kenv='source ~/scripts/kernel-env.sh'
+alias kbuild='~/scripts/rmng-build.sh'
+alias kstatus='~/scripts/rmng-status.sh'
+
+# RMNG agent runtime
+alias rmng-status='rmng status 2>/dev/null || echo "rmng not installed — run ./scripts/install-rmng.sh"'
+alias rmngd-status='systemctl --user --no-pager status rmngd.service'
+alias rmngd-restart='systemctl --user restart rmngd.service'
+alias rmng-audit='tail -n 20 "${RMNG_HOME}/logs/audit.jsonl" 2>/dev/null || echo "no audit log yet"'
+
+# Quick navigation
+alias cdproj='cd "${RMNG_PROJECT_ROOT}"'
+alias cdagents='cd "${RMNG_PROJECT_ROOT}/agents"'
+alias cdkern='cd ~/dev/kernel/linux'
+
+# Integration / MCP helpers
+alias mcp-allowlist='${EDITOR:-nano} "${RMNG_HOME}/mcp-allowlist.toml"'
+alias mcp-register='${RMNG_PROJECT_ROOT}/scripts/register-mcp-tool.sh'
+
+# Reproducible setup
+alias rmng-setup='${RMNG_PROJECT_ROOT}/scripts/dev-environment-setup.sh'

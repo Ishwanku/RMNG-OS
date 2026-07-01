@@ -1,0 +1,8 @@
+{
+  "action": "tool.execute",
+  "target": "github.pr_status",
+  "parameters": {},
+  "metadata": {
+    "skill_name": "github-workflow"
+  }
+}

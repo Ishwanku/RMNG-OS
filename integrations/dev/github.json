@@ -1,0 +1,22 @@
+{
+  "name": "dev.github",
+  "version": "0.1.0",
+  "description": "GitHub CLI integration for PR and issue context",
+  "auth": { "type": "gh_cli" },
+  "tools": [
+    {
+      "name": "github.pr_status",
+      "description": "Current pull request status for the repository via gh CLI",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to git repository (defaults to RMNG_PROJECT_ROOT)"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

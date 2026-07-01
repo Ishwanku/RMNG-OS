@@ -73,10 +73,22 @@ For full git history later: `git -C linux fetch --unshallow`
 
 ## 6. Build Environment
 
+**Recommended (idempotent, full wiring):**
+
+```bash
+cd ~/dev/projects/RMNG-OS
+./scripts/dev-environment-setup.sh
+```
+
+This runs `workspace-setup.sh`, seeds `~/.rmng/`, appends shell snippets, and checks prerequisites.
+
+Manual alternative:
+
 ```bash
 cp scripts/kernel-env.sh ~/scripts/
 chmod +x ~/scripts/kernel-env.sh
 cat dotfiles/bashrc.ccache.snippet >> ~/.bashrc
+./scripts/setup-rmng-home.sh
 ```
 
 ## 7. Kernel Configuration

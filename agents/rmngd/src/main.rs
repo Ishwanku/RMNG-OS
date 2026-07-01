@@ -54,7 +54,10 @@ async fn main() {
     let listener = UnixListener::bind(&path).expect("bind unix socket");
     info!(socket = %path.display(), "rmngd listening");
 
-    let runtime = Runtime::default();
+    let runtime = Runtime::bootstrap().unwrap_or_else(|e| {
+        tracing::warn!(error = %e, "bootstrap failed — starting in degraded mode");
+        Runtime::default()
+    });
 
     loop {
         let (stream, _) = listener.accept().await.expect("accept");

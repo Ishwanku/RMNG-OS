@@ -7,7 +7,19 @@ Common commands for day-to-day RMNG-OS kernel development.
 ```bash
 wsl -d Ubuntu-24.04          # from PowerShell, if needed
 cd ~/dev/projects/RMNG-OS
-~/scripts/rmng-status.sh     # verify environment
+~/scripts/rmng-status.sh     # verify kernel environment
+rmng status                  # verify agent runtime (if installed)
+rmngd-status                 # alias — systemd user unit
+```
+
+## One-Time / Repeatable Setup
+
+```bash
+cd ~/dev/projects/RMNG-OS
+./scripts/dev-environment-setup.sh   # dirs, ~/.rmng, shell snippets, rust check
+./scripts/install-rmng.sh              # rmng + rmngd + allowlist + systemd
+./scripts/setup-dev-mcp.sh             # IDE MCP only (~/.config/rmng/)
+./scripts/check-dev-prerequisites.sh   # report missing tools
 ```
 
 ## Build Environment
@@ -172,7 +184,45 @@ Optional: merge entries into `~/.cursor/mcp.json` for Cursor. **Never commit** M
 | github | Issues, PRs, Actions context | Planned `github.*` native tools |
 | memory | Cross-session IDE notes | `~/.rmng/` runtime (Phase 7+) |
 
-The Rust MCP bridge (`rmng-mcp`) is **Phase 6b** — not part of this setup.
+The Rust MCP bridge (`rmng-mcp`) is **Phase 6b** — production path uses `~/.rmng/mcp-allowlist.toml`.
+
+## Production MCP Allowlist (rmngd)
+
+```bash
+# View / edit
+mcp-allowlist                    # alias → ~/.rmng/mcp-allowlist.toml
+cat ~/.rmng/mcp-allowlist.toml
+
+# Register a new server (Track 2)
+./scripts/register-mcp-tool.sh git uvx mcp-server-git \
+  --repository ~/dev/projects/RMNG-OS --tools git.log
+
+rmngd-restart
+rmng send -f agents/schemas/mcp-git-log.intent.json
+rmng-audit                       # tail audit log
+```
+
+Governance: [INTEGRATION-STRATEGY.md](INTEGRATION-STRATEGY.md) · per-repo docs in [integrations/](integrations/).
+
+## Skills (Nervous Context — Track 3)
+
+```bash
+ls skills/
+cat skills/INDEX.md
+rmng ask "follow kernel-build skill" --skill kernel-build --dry-run
+```
+
+Skills inform the LLM; they never execute tools directly (ADR-010).
+
+## ~/.rmng Layout
+
+| Path | Purpose |
+|------|---------|
+| `config.toml` | BYO-LLM settings |
+| `mcp-allowlist.toml` | Production MCP proxy allowlist |
+| `logs/audit.jsonl` | Permission + dispatch audit |
+| `sessions/` | Ephemeral session artifacts |
+| `allowlists/` | Allowlist change backups |
 
 ## Troubleshooting
 

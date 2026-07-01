@@ -26,4 +26,5 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
 serde_yaml = "0.9"
+jsonschema = "0.26"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

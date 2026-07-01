@@ -1,14 +1,36 @@
-# Copy to ~/.rmng/mcp-allowlist.toml — never commit tokens or machine-specific paths
-# Run: ./scripts/setup-mcp-allowlist.sh
+# RMNG MCP production allowlist — rmngd proxy plane only
+# =============================================================================
+# Copy to: ~/.rmng/mcp-allowlist.toml
+# Seed:    ./scripts/setup-mcp-allowlist.sh
+# Add:     ./scripts/register-mcp-tool.sh <server> <cmd> [args] --tools t1,t2
+#
+# ADR-014: Only explicitly listed servers/tools may execute via mcp.proxy intents.
+# ADR-010: This is the BODY path — not IDE dev MCP (~/.config/rmng/mcp-dev.json).
+#
+# Schema (matches agents/rmng-core/src/allowlist.rs):
+#   [servers.<name>]
+#   enabled         = true | false
+#   command         = "npx" | "uvx" | absolute path
+#   args            = ["arg1", "arg2"]
+#   allowed_tools   = ["tool.id", "another.tool"]   # NO wildcards
+#
+# Intent wire format (ADR-015):
+#   { "kind": "mcp.proxy", "server": "<name>", "tool": "<tool.id>", "params": {} }
+#
+# Tool naming: allowlist uses dotted IDs (git.log); rmng-mcp maps to MCP wire names.
+# After edits: systemctl --user restart rmngd
+# Audit:       tail ~/.rmng/logs/audit.jsonl
+# Docs:        docs/INTEGRATION-STRATEGY.md · docs/integrations/
+# =============================================================================
 
 [servers.github]
 enabled = true
 command = "npx"
-args = ["@github/github-mcp-server"]
+args = ["-y", "@github/github-mcp-server"]
 allowed_tools = ["get_issue", "create_issue"]
 
 [servers.git]
 enabled = true
 command = "uvx"
-args = ["mcp-server-git"]
+args = ["mcp-server-git", "--repository", "/path/to/RMNG-OS"]
 allowed_tools = ["git.log"]

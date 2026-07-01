@@ -8,12 +8,16 @@ pub mod error;
 pub mod intent;
 pub mod ipc;
 pub mod permission;
+pub mod registry;
 pub mod response;
 pub mod tool;
 pub mod tools;
+pub mod validator;
 
 pub use allowlist::{McpAllowlist, McpServerConfig};
-pub use audit::{AuditEntry, AuditLog};
+pub use audit::{AuditEntry, AuditLog, AuditTrack};
+pub use registry::{IntegrationManifest, IntegrationRegistry, ToolManifest};
+pub use validator::IntentValidator;
 pub use config::{LlmConfig, LlmProvider, RmngConfig};
 pub use dispatch::Runtime;
 pub use error::RmngError;

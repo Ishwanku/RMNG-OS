@@ -3,7 +3,7 @@ use crate::tool::ToolResult;
 use crate::RmngError;
 use std::path::PathBuf;
 
-fn default_repo() -> PathBuf {
+pub(crate) fn default_repo() -> PathBuf {
     if let Ok(p) = std::env::var("RMNG_PROJECT_ROOT") {
         return PathBuf::from(p);
     }
@@ -16,7 +16,7 @@ fn default_repo() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn resolve_repo(args: &serde_json::Value) -> Result<PathBuf, RmngError> {
+pub(crate) fn resolve_repo(args: &serde_json::Value) -> Result<PathBuf, RmngError> {
     match args.get("path").and_then(|v| v.as_str()) {
         Some(p) => validate_repo_path(p),
         None => Ok(default_repo()),
@@ -32,6 +32,22 @@ pub async fn status(args: &serde_json::Value) -> Result<ToolResult, RmngError> {
         )));
     }
     run_program("git", &["status", "--porcelain", "-b"], Some(&repo)).await
+}
+
+pub async fn diff(args: &serde_json::Value) -> Result<ToolResult, RmngError> {
+    let repo = resolve_repo(args)?;
+    if !repo.join(".git").exists() {
+        return Err(RmngError::ToolFailed(format!(
+            "not a git repository: {}",
+            repo.display()
+        )));
+    }
+    let staged = args.get("staged").and_then(|v| v.as_bool()).unwrap_or(false);
+    if staged {
+        run_program("git", &["diff", "--stat", "--cached"], Some(&repo)).await
+    } else {
+        run_program("git", &["diff", "--stat"], Some(&repo)).await
+    }
 }
 
 

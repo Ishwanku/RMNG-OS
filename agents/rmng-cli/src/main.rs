@@ -1,9 +1,11 @@
+mod observe;
+
 use clap::{Parser, Subcommand};
 use rmng_core::{
     daemon_running, parse_incoming, send_intent_json, CoreIntent, HandleResponse, Intent,
     PermissionGate, PermissionVerdict, RmngConfig, Runtime, socket_path,
 };
-use rmng_nervous::{load_skill, NervousConnector};
+use rmng_nervous::{load_skill, load_skill_index, AgentRouter, NervousConnector};
 
 #[derive(Parser)]
 #[command(name = "rmng", about = "RMNG-OS CLI", version)]
@@ -34,6 +36,8 @@ enum Commands {
         prompt: String,
         #[arg(short = 's', long = "skill", help = "Load skills/<name>/SKILL.md as context")]
         skill: Option<String>,
+        #[arg(short = 'a', long = "agent", help = "Route via agents/definitions/<name>.yaml")]
+        agent: Option<String>,
         #[arg(long, help = "Produce intent only; do not dispatch to rmngd")]
         dry_run: bool,
     },
@@ -41,6 +45,8 @@ enum Commands {
     Tools,
     /// Show runtime status
     Status,
+    /// Runtime observability — integrations, agents, audit tail, MCP allowlist
+    Observe,
 }
 
 /// Dispatch v2 intent to rmngd only — CLI never executes tools locally.
@@ -188,43 +194,85 @@ async fn main() {
         Commands::Ask {
             prompt,
             skill,
+            agent,
             dry_run,
         } => {
-            let loaded_skill = match skill.as_deref() {
-                Some(name) => match load_skill(name) {
-                    Ok(s) => Some(s),
-                    Err(e) => {
-                        eprintln!("skill error: {e}");
-                        std::process::exit(1);
-                    }
-                },
-                None => None,
-            };
+            if agent.is_some() && skill.is_some() {
+                eprintln!("use either --agent or --skill, not both");
+                std::process::exit(1);
+            }
 
-            let connector = NervousConnector::load();
-            let skill_ref = loaded_skill.as_ref();
-            let skill_name = skill.as_deref();
-            match connector
-                .reason_core(&prompt, skill_name, skill_ref)
-                .await
-            {
-                Ok(intent) => dispatch_core_intent(&intent, dry_run).await,
-                Err(e) => {
-                    eprintln!("nervous system: {e}");
-                    1
+            if let Some(agent_id) = agent {
+                let router = AgentRouter::load();
+                match router.ask(&agent_id, &prompt).await {
+                    Ok(intent) => dispatch_core_intent(&intent, dry_run).await,
+                    Err(e) => {
+                        eprintln!("agent router: {e}");
+                        1
+                    }
+                }
+            } else {
+                let loaded_skill = match skill.as_deref() {
+                    Some(name) => match load_skill(name) {
+                        Ok(s) => Some(s),
+                        Err(e) => {
+                            eprintln!("skill error: {e}");
+                            std::process::exit(1);
+                        }
+                    },
+                    None => None,
+                };
+
+                let connector = NervousConnector::load();
+                let skill_ref = loaded_skill.as_ref();
+                let skill_name = skill.as_deref();
+                match connector.reason_core(&prompt, skill_name, skill_ref).await {
+                    Ok(intent) => dispatch_core_intent(&intent, dry_run).await,
+                    Err(e) => {
+                        eprintln!("nervous system: {e}");
+                        1
+                    }
                 }
             }
         }
         Commands::Tools => {
-            for t in rmng_core::tools::list() {
-                println!("{t}");
+            match rmng_core::IntegrationRegistry::load() {
+                Ok(reg) => {
+                    for t in reg.allowed_tool_names() {
+                        let handler = if rmng_core::tools::registered_tools().contains(&t.as_str()) {
+                            "handler"
+                        } else {
+                            "manifest-only"
+                        };
+                        println!("{t} ({handler})");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("registry: {e}");
+                    for t in rmng_core::tools::registered_tools() {
+                        println!("{t}");
+                    }
+                }
             }
             0
         }
         Commands::Status => {
             let cfg = RmngConfig::load();
             let connector = NervousConnector::from_config(cfg);
-            println!("rmng 0.1.0 — Phase 6c (BYO-LLM + skills)");
+            println!("rmng 0.1.0 — Sprint 2 (agents + router + observe)");
+            if let Ok(reg) = rmng_core::IntegrationRegistry::load() {
+                println!(
+                    "integrations: {} manifests, {} tools",
+                    reg.manifests().len(),
+                    reg.allowed_tool_names().len()
+                );
+            }
+            if let Ok(index) = load_skill_index() {
+                println!("skills index: {} (progressive disclosure)", index.len());
+            }
+            if let Ok(agents) = rmng_nervous::AgentRegistry::load() {
+                println!("agents: {}", agents.agent_ids().len());
+            }
             println!("runtime: rmng-core");
             println!("nervous: {} ({})", connector.provider_label(), RmngConfig::config_path().display());
             println!("audit log: {}", rmng_core::AuditLog::default_path().display());
@@ -233,6 +281,10 @@ async fn main() {
                 if daemon_running() { "running" } else { "stopped" },
                 socket_path().display()
             );
+            0
+        }
+        Commands::Observe => {
+            observe::print_observe();
             0
         }
     };

@@ -31,6 +31,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the full plan.
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Architecture decision records |
 | [docs/setup.md](docs/setup.md) | WSL install guide |
 | [docs/daily-workflow.md](docs/daily-workflow.md) | Daily commands |
+| [docs/INTEGRATION-STRATEGY.md](docs/INTEGRATION-STRATEGY.md) | **Integrating OSS repos safely** |
 
 ### Phase 1 Achievements
 
@@ -83,9 +84,13 @@ If you already completed Phase 1 setup:
 
 ```bash
 cd ~/dev/projects/RMNG-OS
-./scripts/workspace-setup.sh    # wire symlinks
-~/scripts/rmng-status.sh        # verify everything
+./scripts/dev-environment-setup.sh   # idempotent: dirs, ~/.rmng, shell, rust check
+./scripts/install-rmng.sh              # rmng + rmngd + MCP allowlist
+~/scripts/rmng-status.sh               # verify kernel environment
+rmng status                            # verify agent runtime
 ```
+
+**Future integrations:** see [docs/INTEGRATION-STRATEGY.md](docs/INTEGRATION-STRATEGY.md) before adding MCP servers, agent frameworks, or skill packs.
 
 ## Fresh Install
 

@@ -1,5 +1,6 @@
 use crate::allowlist::{McpAllowlist, McpServerConfig};
 use crate::intent::{CoreIntent, Intent, IntentKind};
+use crate::registry::IntegrationRegistry;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PermissionVerdict {
@@ -15,24 +16,36 @@ pub struct PermissionGate {
 
 impl Default for PermissionGate {
     fn default() -> Self {
-        Self {
-            allowed_tools: vec![
-                "kernel.status".into(),
-                "kernel.build".into(),
-                "kernel.apply_patches".into(),
-                "git.status".into(),
-            ],
-            mcp_allowlist: McpAllowlist::load().unwrap_or_default(),
+        match IntegrationRegistry::load() {
+            Ok(reg) => Self::from_registry(&reg),
+            Err(e) => {
+                tracing::warn!(error = %e, "integration registry load failed — empty native allowlist");
+                Self::from_registry(
+                    &IntegrationRegistry::load_from(std::path::Path::new("/nonexistent")).unwrap(),
+                )
+            }
         }
     }
 }
 
 impl PermissionGate {
+    /// Build gate with native tools derived from integration manifests.
+    pub fn from_registry(registry: &IntegrationRegistry) -> Self {
+        Self {
+            allowed_tools: registry.allowed_tool_names(),
+            mcp_allowlist: McpAllowlist::load().unwrap_or_default(),
+        }
+    }
+
     pub fn new(allowed_tools: Vec<String>) -> Self {
         Self {
             allowed_tools,
             mcp_allowlist: McpAllowlist::load().unwrap_or_default(),
         }
+    }
+
+    pub fn allowed_tools(&self) -> &[String] {
+        &self.allowed_tools
     }
 
     pub fn with_mcp_allowlist(mut self, allowlist: McpAllowlist) -> Self {
@@ -98,8 +111,14 @@ impl PermissionGate {
 mod tests {
     use super::*;
     use crate::intent::{CoreIntent, Intent, IntentKind};
+    use crate::registry::IntegrationRegistry;
     use std::collections::HashMap;
     use uuid::Uuid;
+
+    fn fixture_registry() -> IntegrationRegistry {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../integrations");
+        IntegrationRegistry::load_from(root).expect("fixture integrations")
+    }
 
     fn test_gate_with_mcp() -> PermissionGate {
         let mut servers = HashMap::new();
@@ -112,12 +131,12 @@ mod tests {
                 allowed_tools: vec!["git.log".into()],
             },
         );
-        PermissionGate::default().with_mcp_allowlist(McpAllowlist { servers })
+        PermissionGate::from_registry(&fixture_registry()).with_mcp_allowlist(McpAllowlist { servers })
     }
 
     #[test]
     fn allows_git_status() {
-        let gate = PermissionGate::default();
+        let gate = PermissionGate::from_registry(&fixture_registry());
         let intent = Intent {
             schema_version: "1".into(),
             intent_id: Uuid::new_v4(),
@@ -133,7 +152,7 @@ mod tests {
 
     #[test]
     fn denies_unknown_tool() {
-        let gate = PermissionGate::default();
+        let gate = PermissionGate::from_registry(&fixture_registry());
         let intent = Intent {
             schema_version: "1".into(),
             intent_id: Uuid::new_v4(),
@@ -161,7 +180,8 @@ mod tests {
 
     #[test]
     fn denies_unconfigured_mcp_server() {
-        let gate = PermissionGate::default().with_mcp_allowlist(McpAllowlist::default());
+        let gate =
+            PermissionGate::from_registry(&fixture_registry()).with_mcp_allowlist(McpAllowlist::default());
         let intent = CoreIntent::McpProxy {
             mcp_server: "github".into(),
             mcp_tool: "create_issue".into(),

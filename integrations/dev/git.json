@@ -1,6 +1,6 @@
 {
   "name": "dev.git",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Git repository monitoring — no shell, direct git invocation",
   "auth": { "type": "none" },
   "tools": [
@@ -13,6 +13,25 @@
           "path": {
             "type": "string",
             "description": "Absolute path to git repository (defaults to RMNG_PROJECT_ROOT)"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "git.diff",
+      "description": "Show diff stat for working tree or staged changes",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to git repository (defaults to RMNG_PROJECT_ROOT)"
+          },
+          "staged": {
+            "type": "boolean",
+            "description": "If true, show staged (--cached) diff only",
+            "default": false
           }
         },
         "additionalProperties": false

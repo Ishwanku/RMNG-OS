@@ -276,14 +276,14 @@ Schedule **bare-metal boot capability in Phase 4** (Advanced Kernel), before ful
 Top GitHub OSS ecosystems (MCP, agent skills, orchestration frameworks) offer thousands of tools. RMNG-OS must adopt selectively without violating ADR-010 nervous/body separation or low-overhead philosophy.
 
 ### Decision
-1. **Native Rust tools** remain the production execution path.
-2. **Skills** ship in-repo under  (Agent Skills format).
-3. **MCP** is dev-time IDE assist via local config; optional gated  bridge in Phase 6b.
-4. **Agent definitions** in  are RMNG specialists only.
+1. **Native Rust tools** remain the production execution path (`integrations/` + `PermissionGate`).
+2. **Skills** ship in-repo under `skills/` (Agent Skills format) — nervous context only.
+3. **MCP** is dev-time IDE assist via `~/.config/rmng/mcp-dev.json`; optional gated `rmng-mcp` bridge in Phase 6b via `~/.rmng/mcp-allowlist.toml`.
+4. **Agent definitions** in `agents/` are RMNG specialists only.
 5. Discovery indexes (awesome-mcp-servers) are referenced, never vendored.
 
 ### Consequences
-- ✅ Plan: 
+- ✅ Plan: [PLAN-AGENTS-MCP-SKILLS.md](PLAN-AGENTS-MCP-SKILLS.md) · [INTEGRATION-STRATEGY.md](INTEGRATION-STRATEGY.md)
 - ⚠️ MCP allowlist required before production bridge
 
 ---

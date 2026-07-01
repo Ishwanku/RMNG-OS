@@ -1,0 +1,13 @@
+id: repo-keeper
+description: >-
+  Repository and GitHub hygiene specialist — git status, diffs, PR context,
+  and safe commits within RMNG-OS. Does not run kernel builds.
+skills:
+  - git-workflow
+  - github-workflow
+allowed_native_tools:
+  - git.status
+  - git.diff
+  - github.pr_status
+allowed_mcp_tools:
+  - git:git.log
