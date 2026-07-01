@@ -38,6 +38,20 @@ Audit events: `nervous.handoff_chain_policy` (decision), `nervous.handoff_chain_
 
 Session `shared_context.orchestration` gains `hop_decisions[]` and `skipped_hops[]` on recovery paths.
 
+## Auto-continue foundation (Sprint 25)
+
+Continuation state lives at `orchestration.continuation` (daemon-resumable):
+
+| Field | Purpose |
+|-------|---------|
+| `continuation.enabled` | Loop active |
+| `continuation.step` / `max_steps` | Progress cursor |
+| `continuation.active_agent` | Next agent to ask |
+| `awaiting_continuation` | Set after handoff chain completes — tool dispatch may follow |
+| `history[]` | Last 5 finalized orchestration snapshots |
+
+CLI `--auto-continue` uses `AutoContinueLoop` in `rmng-nervous`; future rmngd workers can call `run_step()` + dispatch without duplicating logic.
+
 ## Chain error recovery (Sprint 25)
 
 Failed and skipped hops are persisted for orchestrator re-planning:

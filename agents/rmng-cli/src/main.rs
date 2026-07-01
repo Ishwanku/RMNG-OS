@@ -10,10 +10,11 @@ use rmng_core::{
     IntegrationRegistry,
 };
 use rmng_core::OrchestrationSnapshot;
+use rmng_core::ContinuationStatus;
 use rmng_nervous::{
     list_supported_providers,
-    load_skill, load_skill_index, run_provider_matrix, AgentRouter,
-    NervousConnector, RouteOutcome,
+    load_skill, load_skill_index, run_provider_matrix, AgentRouter, AutoContinueLoop,
+    AutoContinueStep, AutoContinueStopReason, NervousConnector, RouteOutcome,
 };
 
 #[derive(Parser)]
@@ -256,52 +257,80 @@ async fn ask_with_auto_continue(
     max_steps: u32,
     dry_run: bool,
 ) -> i32 {
-    let mut agent_id = start_agent.to_string();
-    let mut step_prompt = prompt.to_string();
-    let mut last_code = 0;
+    let mut cont =
+        AutoContinueLoop::new(session_id, start_agent, prompt, max_steps);
+    if let Err(e) = cont.begin_session(router.sessions()) {
+        eprintln!("auto-continue: session init failed: {e}");
+        return 1;
+    }
 
+    let mut last_code = 0;
     for step in 0..max_steps {
-        let outcome = match router
-            .ask_routed(Some(session_id), &agent_id, &step_prompt)
-            .await
-        {
-            Ok(o) => o,
+        let step_result = match cont.run_step(router).await {
+            Ok(r) => r,
             Err(e) => {
                 eprintln!("agent router (step {}): {e}", step + 1);
                 print_orchestration_failure_context(session_id);
+                let _ = cont.finish_session(
+                    router.sessions(),
+                    "failed",
+                    ContinuationStatus::Failed,
+                );
                 return 1;
             }
         };
 
-        if outcome.is_handoff() {
-            print_handoff_outcome(&outcome);
-        }
-
-        let mut intent = outcome.intent();
-        let handoff_from = outcome.handoff_from_agent();
-        AgentRouter::enrich_intent_metadata(&mut intent, Some(session_id), handoff_from);
-
-        let executable = intent.is_executable();
-        last_code = dispatch_core_intent(&intent, dry_run, Some(session_id)).await;
-
-        if !executable {
-            return last_code;
-        }
-        if last_code != 0 {
-            eprintln!("auto-continue: dispatch failed at step {}, stopping", step + 1);
-            return last_code;
-        }
-
-        if let Some(next) = outcome.final_agent() {
-            agent_id = next.to_string();
-        }
-        step_prompt = "Continue the orchestration. If specialist work is complete, emit plan.only with handoff_return_to swarm-coordinator summarizing recent_tool_results. Otherwise execute the next required tool. Do not repeat successful tools.".to_string();
-
-        if step + 1 >= max_steps {
-            println!("auto-continue: reached max steps ({max_steps})");
-            return last_code;
+        match step_result {
+            AutoContinueStep::Stop {
+                exit_code,
+                reason: AutoContinueStopReason::PlanOnly,
+            } => {
+                let _ = cont.finish_session(
+                    router.sessions(),
+                    "completed",
+                    ContinuationStatus::Done,
+                );
+                return exit_code;
+            }
+            AutoContinueStep::Executed { outcome, intent } => {
+                if outcome.is_handoff() {
+                    print_handoff_outcome(&outcome);
+                }
+                last_code = dispatch_core_intent(&intent, dry_run, Some(session_id)).await;
+                if last_code != 0 {
+                    eprintln!(
+                        "auto-continue: dispatch failed at step {}, stopping",
+                        step + 1
+                    );
+                    let _ = cont.finish_session(
+                        router.sessions(),
+                        "failed",
+                        ContinuationStatus::Failed,
+                    );
+                    return last_code;
+                }
+                cont.prepare_next_step(&outcome);
+                if let Err(e) = cont.sync_session(router.sessions()) {
+                    eprintln!("auto-continue: session sync failed: {e}");
+                }
+                if cont.at_max_steps() {
+                    println!("auto-continue: reached max steps ({max_steps})");
+                    let _ = cont.finish_session(
+                        router.sessions(),
+                        "completed",
+                        ContinuationStatus::Exhausted,
+                    );
+                    return last_code;
+                }
+            }
+            AutoContinueStep::Stop { exit_code, .. } => return exit_code,
         }
     }
+    let _ = cont.finish_session(
+        router.sessions(),
+        "completed",
+        ContinuationStatus::Done,
+    );
     last_code
 }
 

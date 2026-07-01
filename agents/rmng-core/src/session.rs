@@ -1,3 +1,4 @@
+use crate::continuation::{ChainContinuation, ContinuationStatus};
 use crate::intent::CoreIntent;
 use crate::response::HandleResponse;
 use chrono::{DateTime, Utc};
@@ -405,6 +406,76 @@ impl SessionStore {
                     error,
                     Some("skip"),
                 );
+            }
+        }
+        session.updated_at = Utc::now();
+        self.save(session)
+    }
+
+    /// Persist auto-continue cursor under orchestration.continuation (Sprint 25).
+    pub fn set_chain_continuation(
+        &self,
+        session: &mut AgentSession,
+        continuation: &ChainContinuation,
+    ) -> Result<(), SessionError> {
+        let entry = session
+            .shared_context
+            .entry("orchestration".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert("continuation".into(), continuation.to_json());
+            obj.insert("awaiting_continuation".into(), serde_json::json!(continuation.enabled));
+            obj.insert(
+                "continuation_agent".into(),
+                serde_json::json!(continuation.active_agent),
+            );
+        }
+        session.updated_at = Utc::now();
+        self.save(session)
+    }
+
+    /// Read continuation cursor from session orchestration state.
+    pub fn chain_continuation(session: &AgentSession) -> Option<ChainContinuation> {
+        session
+            .shared_context
+            .get("orchestration")
+            .and_then(|o| o.get("continuation"))
+            .and_then(ChainContinuation::from_value)
+    }
+
+    /// Mark orchestration terminal and archive for daemon/history (Sprint 25).
+    pub fn finalize_orchestration(
+        &self,
+        session: &mut AgentSession,
+        status: &str,
+        continuation_status: ContinuationStatus,
+    ) -> Result<(), SessionError> {
+        if let Some(orch) = session.shared_context.get_mut("orchestration") {
+            if let Some(obj) = orch.as_object_mut() {
+                obj.insert("status".into(), serde_json::json!(status));
+                obj.insert("finalized_at".into(), serde_json::json!(Utc::now().to_rfc3339()));
+                obj.insert("awaiting_continuation".into(), serde_json::json!(false));
+                if let Some(cont_val) = obj.get_mut("continuation") {
+                    if let Some(cont) = cont_val.as_object_mut() {
+                        cont.insert("enabled".into(), serde_json::json!(false));
+                        cont.insert(
+                            "status".into(),
+                            serde_json::json!(continuation_status),
+                        );
+                    }
+                }
+            }
+            let snapshot = orch.clone();
+            if let Some(obj) = orch.as_object_mut() {
+                let history = obj
+                    .entry("history")
+                    .or_insert_with(|| serde_json::json!([]));
+                if let Some(arr) = history.as_array_mut() {
+                    arr.push(snapshot);
+                    while arr.len() > 5 {
+                        arr.remove(0);
+                    }
+                }
             }
         }
         session.updated_at = Utc::now();

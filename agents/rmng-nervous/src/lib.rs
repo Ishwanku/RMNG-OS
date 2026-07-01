@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod chain;
 pub mod connector;
+pub mod continuation;
 pub mod layer;
 pub mod orchestration_prompt;
 mod mock;
@@ -23,6 +24,7 @@ pub use providers::{
     MatrixRow, ModelEntry, ModelSyncReport, OllamaProvider, ProviderEntry, ProviderError,
     ProviderErrorKind, ReasonResult,
 };
+pub use continuation::{AutoContinueLoop, AutoContinueStep, AutoContinueStopReason};
 pub use router::{AgentRoute, AgentRouter, RouteOutcome, RouterError};
 pub use skill::{load_skill, load_skill_index, load_skills_for_agent, AgentSkill, SkillError, SkillSummary};
 

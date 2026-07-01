@@ -395,6 +395,7 @@ Return context: {prompt}"
                         "status": "in_progress",
                         "hop_failure_policy": format!("{:?}", options.hop_failure_policy).to_ascii_lowercase(),
                         "hop_retry_max": options.hop_retry_max,
+                        "awaiting_continuation": false,
                     }),
                 )
                 .map_err(|e| RouterError::Session(e.to_string()))?;
@@ -595,6 +596,10 @@ Return context: {prompt}"
                         "hops_completed".into(),
                         serde_json::json!(hops.len()),
                     );
+                    if let Some(final_agent) = chain.last() {
+                        obj.insert("awaiting_continuation".into(), serde_json::json!(true));
+                        obj.insert("continuation_agent".into(), serde_json::json!(final_agent));
+                    }
                 }
             }
             self.sessions

@@ -10,6 +10,7 @@ pub mod dispatch;
 pub mod error;
 pub mod intent;
 pub mod orchestration;
+pub mod continuation;
 pub mod ipc;
 pub mod permission;
 pub mod registry;
@@ -57,6 +58,9 @@ pub use intent::{
 pub use orchestration::{
     parse_hop_failure_policy, ChainHopError, HandoffChainOptions, HopFailurePolicy,
     OrchestrationSnapshot,
+};
+pub use continuation::{
+    ChainContinuation, ContinuationStatus, DEFAULT_CONTINUATION_PROMPT,
 };
 
 /// Parse IPC payload as v2 core intent or fall back to v1 intent envelope.
