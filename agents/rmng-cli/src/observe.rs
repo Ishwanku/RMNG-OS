@@ -34,9 +34,21 @@ fn agent_budget_caps() -> Vec<(String, Option<f64>)> {
 }
 
 #[derive(Serialize)]
+struct ObserveHealthSummary {
+    rmngd_running: bool,
+    socket_path: String,
+    circuits_open: u32,
+    sessions_total: u32,
+    sessions_awaiting_continuation: u32,
+    auto_continue_max_steps: u32,
+    auto_continue_timeout_secs: u64,
+}
+
+#[derive(Serialize)]
 struct ObserveCostJson {
     schema_version: u32,
     generated_at: String,
+    health: ObserveHealthSummary,
     cost_rollup: rmng_core::CostRollupReport,
     resource_rollup: rmng_core::ResourceRollupReport,
     spent_last_7d_usd: f64,
@@ -60,10 +72,20 @@ pub async fn print_observe(cost_only: bool, json: bool) {
         let budgets = budget_governance_report(&cfg, &entries, &agent_budget_caps());
         let circuits = list_circuit_statuses();
         let circuits_open = circuits.iter().filter(|c| c.open).count() as u32;
+        let (sessions_total, awaiting_cont) = session_continuation_counts();
         if json {
             let out = ObserveCostJson {
                 schema_version: 1,
                 generated_at: Utc::now().to_rfc3339(),
+                health: ObserveHealthSummary {
+                    rmngd_running: rmng_core::daemon_running(),
+                    socket_path: rmng_core::socket_path().display().to_string(),
+                    circuits_open,
+                    sessions_total,
+                    sessions_awaiting_continuation: awaiting_cont,
+                    auto_continue_max_steps: cfg.auto_continue.max_steps,
+                    auto_continue_timeout_secs: cfg.auto_continue.timeout_secs,
+                },
                 cost_rollup: rollup,
                 resource_rollup: resource_rollup.clone(),
                 spent_last_7d_usd: spent_7d,
@@ -123,11 +145,19 @@ pub async fn print_observe(cost_only: bool, json: bool) {
     println!();
 
     let daemon_up = rmng_core::daemon_running();
+    let (sessions_total, awaiting_cont) = session_continuation_counts();
     println!(
         "rmngd:        {}",
         if daemon_up { "running" } else { "stopped" }
     );
     println!("socket:       {}", rmng_core::socket_path().display());
+    println!(
+        "auto-continue: max_steps={} timeout_secs={} | sessions awaiting continuation: {}/{}",
+        cfg.auto_continue.max_steps,
+        cfg.auto_continue.timeout_secs,
+        awaiting_cont,
+        sessions_total
+    );
     println!();
 
     match IntegrationRegistry::load() {
@@ -355,6 +385,32 @@ fn print_resource_summary(entries: &[rmng_core::AuditEntry]) {
             );
         }
     }
+}
+
+fn session_continuation_counts() -> (u32, u32) {
+    let store = SessionStore::default_store();
+    let Ok(ids) = store.list_ids() else {
+        return (0, 0);
+    };
+    let mut awaiting = 0u32;
+    for id in &ids {
+        if let Ok(s) = store.load(id) {
+            let active = s
+                .shared_context
+                .get("orchestration")
+                .and_then(|o| o.get("awaiting_continuation"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if active {
+                awaiting += 1;
+            } else if let Some(cont) = SessionStore::chain_continuation(&s) {
+                if cont.should_run() {
+                    awaiting += 1;
+                }
+            }
+        }
+    }
+    (ids.len() as u32, awaiting)
 }
 
 fn print_cost_rollups(

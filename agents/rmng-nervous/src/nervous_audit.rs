@@ -11,6 +11,7 @@ pub fn log_nervous_event(action: &str, outcome: &str, detail: Option<&str>) {
     } else {
         AuditCategory::Plan
     };
+    emit_tracing(category, action, outcome, detail);
     let mut entry = AuditEntry::new(action, outcome);
     entry.category = Some(category);
     entry.track = Some(AuditTrack::Plan);
@@ -51,11 +52,33 @@ pub fn log_llm_telemetry(
 
 /// Budget / governance events (Sprint 11).
 pub fn log_system_event(action: &str, outcome: &str, detail: Option<&str>) {
+    emit_tracing(AuditCategory::System, action, outcome, detail);
     let mut entry = AuditEntry::new(action, outcome);
     entry.category = Some(AuditCategory::System);
     entry.track = Some(AuditTrack::Plan);
     entry.detail = detail.map(str::to_string);
     append_entry(&entry);
+}
+
+fn emit_tracing(category: AuditCategory, action: &str, outcome: &str, detail: Option<&str>) {
+    let detail = detail.unwrap_or("-");
+    match category {
+        AuditCategory::Circuit => {
+            tracing::warn!(%action, %outcome, %detail, "circuit breaker");
+        }
+        AuditCategory::Handoff => {
+            tracing::info!(%action, %outcome, %detail, "agent handoff");
+        }
+        AuditCategory::System if action.contains("budget") => {
+            tracing::warn!(%action, %outcome, %detail, "budget");
+        }
+        AuditCategory::Llm if action.contains("fallback") => {
+            tracing::warn!(%action, %outcome, %detail, "llm fallback");
+        }
+        _ => {
+            tracing::debug!(%action, %outcome, %detail, "nervous event");
+        }
+    }
 }
 
 fn append_entry(entry: &AuditEntry) {

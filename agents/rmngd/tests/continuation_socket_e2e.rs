@@ -6,7 +6,14 @@ use rmng_core::{
 };
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use std::sync::{Mutex, MutexGuard};
 use tokio::time::sleep;
+/// Both tests mutate process-global HOME; serialize to avoid cross-test races.
+static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+fn env_test_guard() -> MutexGuard<'static, ()> {
+    ENV_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 fn isolated_home() -> PathBuf {
     std::env::temp_dir().join(format!("rmng-sock-e2e-{}", uuid::Uuid::new_v4()))
@@ -55,6 +62,7 @@ async fn wait_for_socket(max_ms: u64) -> bool {
 
 #[tokio::test]
 async fn orchestration_continue_over_unix_socket() {
+    let _env_lock = env_test_guard();
     if !cfg!(unix) {
         return;
     }
@@ -115,6 +123,7 @@ async fn orchestration_continue_over_unix_socket() {
 
 #[tokio::test]
 async fn socket_rejects_invalid_continue_without_session_id() {
+    let _env_lock = env_test_guard();
     if !cfg!(unix) {
         return;
     }

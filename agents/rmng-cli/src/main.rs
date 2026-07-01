@@ -1,4 +1,5 @@
 mod audit_cmd;
+mod health;
 mod llm_cmd;
 mod observe;
 
@@ -18,7 +19,16 @@ use rmng_nervous::{
 };
 
 #[derive(Parser)]
-#[command(name = "rmng", about = "RMNG-OS CLI", version)]
+#[command(
+    name = "rmng",
+    about = "RMNG-OS — multi-agent runtime CLI",
+    long_about = "Common workflows:\n  \
+      rmng session new && rmng ask --session <id> --agent swarm-coordinator \"...\"\n  \
+      rmng observe --json          # monitoring snapshot\n  \
+      rmng health --json           # cron-friendly health check\n  \
+      rmng llm health              # LLM provider probe",
+    version
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -96,13 +106,20 @@ enum Commands {
     },
     /// List allowed tools
     Tools,
-    /// Show runtime status
+    /// Quick runtime summary (daemon, sessions, nervous config)
     Status,
-    /// Runtime observability — LLM health, budgets, circuits, MCP resources, audit tail
+    /// Production health check — daemon, readiness, LLM, circuits, audit (cron-friendly)
+    Health {
+        #[arg(long, help = "JSON output for monitoring / systemd / cron")]
+        json: bool,
+        #[arg(long, help = "Skip live LLM network probe (faster; checks config/keys only)")]
+        quick: bool,
+    },
+    /// Deep observability — LLM health, budgets, circuits, MCP resources, audit tail
     Observe {
         #[arg(long, help = "Cost + MCP resource rollups (LLM spend, peak RSS, circuits)")]
         cost: bool,
-        #[arg(long, help = "Structured JSON (schema v1): cost_rollup, resource_rollup, budgets, circuits")]
+        #[arg(long, help = "Structured JSON (schema v1): cost, resources, budgets, circuits, health")]
         json: bool,
     },
     /// Tamper-evident audit log tools
@@ -877,10 +894,11 @@ async fn main() {
             }
             0
         }
+        Commands::Health { json, quick } => health::run_health(json, quick).await,
         Commands::Status => {
             let cfg = RmngConfig::load();
             let connector = NervousConnector::from_config(cfg);
-            println!("rmng 0.1.0 — Sprints 19–22 (ops, resources, security hardening)");
+            println!("rmng 0.1.0 — production ops (health, observe, auto-continue)");
             if let Ok(reg) = IntegrationRegistry::load() {
                 println!(
                     "integrations: {} manifests, {} tools",
@@ -906,6 +924,7 @@ async fn main() {
                 if daemon_running() { "running" } else { "stopped" },
                 socket_path().display()
             );
+            println!("tip: rmng health — full readiness; rmng observe — deep metrics");
             0
         }
         Commands::Observe { cost, json } => {

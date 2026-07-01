@@ -332,7 +332,10 @@ pub async fn run_health(json: bool) -> i32 {
         api_key_set: bool,
         endpoint: Option<String>,
         detail: String,
+        rmngd_running: bool,
+        socket_path: String,
         circuit_state_path: String,
+        circuits_open: u32,
         circuit_breakers: Vec<rmng_nervous::CircuitStatus>,
         budget: Option<rmng_core::BudgetCheckResult>,
         budgets: rmng_core::BudgetGovernanceReport,
@@ -344,6 +347,7 @@ pub async fn run_health(json: bool) -> i32 {
     match health_check_detailed(connector.config()).await {
         Ok(r) => {
             let circuits = list_circuit_statuses();
+            let circuits_open = circuits.iter().filter(|c| c.open).count() as u32;
             let entries = AuditLog::new(AuditLog::default_path())
                 .read_all()
                 .unwrap_or_default();
@@ -369,7 +373,10 @@ pub async fn run_health(json: bool) -> i32 {
                     api_key_set: r.api_key_set,
                     endpoint: r.endpoint,
                     detail: r.detail,
+                    rmngd_running: rmng_core::daemon_running(),
+                    socket_path: rmng_core::socket_path().display().to_string(),
                     circuit_state_path: circuit_state_path().display().to_string(),
+                    circuits_open,
                     circuit_breakers: circuits,
                     budget,
                     budgets,
@@ -385,6 +392,15 @@ pub async fn run_health(json: bool) -> i32 {
                     println!("endpoint:  {ep}");
                 }
                 println!("detail:    {}", r.detail);
+                println!(
+                    "rmngd:     {} ({})",
+                    if rmng_core::daemon_running() {
+                        "running"
+                    } else {
+                        "stopped"
+                    },
+                    rmng_core::socket_path().display()
+                );
                 if circuits.is_empty() {
                     println!("circuits:  none ({})", circuit_state_path().display());
                 } else {
@@ -401,13 +417,23 @@ pub async fn run_health(json: bool) -> i32 {
                     }
                 }
                 if let Some(b) = budget {
-                    println!("budget:    {}", b.message);
+                    let tag = match b.level {
+                        rmng_core::BudgetLevel::Ok => "ok",
+                        rmng_core::BudgetLevel::Warn => "WARN",
+                        rmng_core::BudgetLevel::Deny => "DENY",
+                    };
+                    println!("budget:    [{tag}] {}", b.message);
                 }
                 if let Some(p) = budgets.active_profile {
                     println!("profile:   {} — {}", p.id, p.check.message);
                 }
+                if circuits_open > 0 {
+                    println!("alert:     {circuits_open} circuit breaker(s) OPEN — see circuits above");
+                }
+                println!();
+                println!("tip: rmng health — full readiness + audit; rmng observe — deep metrics");
             }
-            if r.healthy { 0 } else { 1 }
+            if r.healthy && circuits_open == 0 { 0 } else { 1 }
         }
         Err(e) => {
             if json {

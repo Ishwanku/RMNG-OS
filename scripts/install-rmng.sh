@@ -26,6 +26,13 @@ fi
 echo "=== Installing MCP allowlist ==="
 "${ROOT}/scripts/setup-mcp-allowlist.sh"
 
+echo "=== Validating startup (rmngd --validate) ==="
+export RMNG_PROJECT_ROOT="${ROOT}"
+if ! rmngd --validate; then
+  echo "WARN: validation reported ERROR items — fix before relying on production dispatch"
+  echo "      See: docs/integrations/operations-usage.md"
+fi
+
 echo "=== Installing systemd user unit ==="
 mkdir -p "${HOME}/.config/systemd/user"
 cp "${UNIT_SRC}" "${UNIT_DST}"
@@ -39,3 +46,8 @@ echo "  rmngd: $(command -v rmngd)"
 echo "  unit:  ${UNIT_DST}"
 systemctl --user --no-pager status rmngd.service || true
 rmng status
+echo ""
+echo "Monitoring:"
+echo "  rmng health --json          # cron / systemd health probe"
+echo "  rmng observe --json         # cost, circuits, sessions"
+echo "  journalctl --user -u rmngd -f"

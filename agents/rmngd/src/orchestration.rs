@@ -398,7 +398,7 @@ impl DaemonOrchestrator {
 
     fn log_handoff(outcome: &RouteOutcome) {
         if let Some(summary) = outcome.chain_outcome_summary() {
-            info!("{summary}");
+            info!(event = "daemon.handoff", summary = %summary);
         }
     }
 }

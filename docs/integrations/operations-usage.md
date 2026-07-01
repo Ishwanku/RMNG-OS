@@ -1,6 +1,102 @@
-# Operations & Production Hardening (Sprint 19–22)
+# Operations & Production Hardening (Sprint 19–28)
 
-Observability, circuit breakers, budgets, MCP resource metrics, and audit verification for CI/cron.
+Observability, circuit breakers, budgets, MCP resource metrics, audit verification, and production deployment for CI/cron.
+
+## Production setup (recommended)
+
+### Install & validate
+
+```bash
+cd ~/dev/projects/RMNG-OS
+./scripts/install-rmng.sh          # build, config, allowlist, systemd user unit
+rmngd --validate                   # pre-flight: config, dirs, agents, audit
+rmng health                        # human summary
+rmng health --json                 # monitoring / cron (exit 0 = healthy)
+```
+
+`rmngd --validate` checks: `~/.rmng` layout, config parse, writable session/socket dirs, integration manifests, LLM config, MCP allowlist, audit chain, agent registry (`RMNG_PROJECT_ROOT`), and `[auto_continue]` settings. **ERROR** items block systemd start via `ExecStartPre`; **WARN** items log but allow start.
+
+### systemd user unit
+
+Installed to `~/.config/systemd/user/rmngd.service` from `config/rmngd.service`.
+
+| Setting | Purpose |
+|---------|---------|
+| `RMNG_PROJECT_ROOT` | Agent definitions under `agents/definitions/` |
+| `EnvironmentFile=-~/.rmng/secrets.env` | API keys (optional, `-` = ignore if missing) |
+| `ExecStartPre=rmngd --validate` | Fail fast on ERROR misconfiguration |
+| `RUST_LOG=info` | Journal-friendly structured logs |
+
+```bash
+systemctl --user status rmngd
+systemctl --user restart rmngd
+journalctl --user -u rmngd -f       # handoffs, continuation, budgets, circuits
+```
+
+Tune `RMNG_PROJECT_ROOT` and paths in the unit if your clone lives elsewhere.
+
+### Secrets & config
+
+```bash
+cp config/rmng-config.toml.example ~/.rmng/config.toml
+# Keys in ~/.rmng/secrets.env (never commit):
+#   GOOGLE_API_KEY=...
+#   XAI_API_KEY=...
+./scripts/setup-mcp-allowlist.sh
+```
+
+### Cron / health probes
+
+```bash
+# Lightweight (no LLM network call):
+rmng health --quick --json
+
+# Full probe (LLM + readiness + audit):
+rmng health --json
+
+# Deep metrics snapshot:
+rmng observe --json
+```
+
+Exit codes: `rmng health` → `0` healthy, `1` unhealthy (tampered audit, LLM down, readiness ERROR). `rmng llm health` → `0` when provider reachable and no open circuits.
+
+## Monitoring commands
+
+| Command | Use when |
+|---------|----------|
+| `rmng status` | Quick local summary |
+| `rmng health` | Production readiness + LLM + audit |
+| `rmng health --quick` | Fast cron without LLM ping |
+| `rmng llm health` | Provider-only probe + circuits |
+| `rmng observe` | Budgets, sessions, audit tail |
+| `rmng observe --cost` | Spend rollups + MCP resources |
+| `rmng observe --json` | Full schema v1 for dashboards |
+| `rmng audit verify` | Tamper detection only |
+
+## Troubleshooting
+
+| Symptom | Check | Fix |
+|---------|-------|-----|
+| `rmngd` won't start (systemd) | `rmngd --validate` | Fix ERROR rows (config, agents, dirs) |
+| `agents: registry empty` | `echo $RMNG_PROJECT_ROOT` | Set in unit or shell to repo root |
+| `socket bind failed` | `ls ~/.rmng/rmng.sock` | Stop stale rmngd; remove stale socket |
+| LLM `unreachable` | `rmng llm show` | Key in `secrets.env`, provider/model in config |
+| `circuit breaker open` | `rmng observe --cost` | Wait cooldown or fix provider; check `circuit-state.json` |
+| Budget deny | `rmng observe --json \| jq .budgets` | Raise cap or `enforce = "warn"` |
+| Continuation stuck | `rmng observe` awaiting count | Check `auto_continue.timeout_secs`; inspect session orchestration |
+| Audit tamper | `rmng audit verify` | Investigate `~/.rmng/audit.log` — do not delete without review |
+
+### Log events (journalctl)
+
+Structured `tracing` output from rmngd includes:
+
+- `check=…` — startup readiness (ok/warn/error)
+- `agent handoff` — `nervous.handoff` / `nervous.handoff_return`
+- `daemon auto-continue` — lock, steps, timeout, exhausted
+- `circuit breaker` — open / half_open / closed
+- `budget` — warn or deny before LLM calls
+
+Set `RUST_LOG=rmngd=debug,rmng_nervous=debug` for verbose nervous routing.
 
 ## Circuit breaker (persistent)
 

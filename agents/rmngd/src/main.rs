@@ -1,10 +1,12 @@
 use rmngd::orchestration::DaemonOrchestrator;
+use rmngd::startup::{full_readiness, log_readiness, print_validate_human};
 use rmng_core::{
     parse_daemon_line, DaemonLine, HandleResponse, IncomingIntent, OrchestrationContinueResponse,
     Runtime,
 };
 use rmng_nervous::AgentRouter;
 use std::path::PathBuf;
+use std::process::ExitCode;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
@@ -12,6 +14,23 @@ use tracing::info;
 
 fn socket_path() -> PathBuf {
     rmng_core::socket_path()
+}
+
+fn wants_validate() -> bool {
+    std::env::args().skip(1).any(|a| a == "--validate" || a == "-validate")
+}
+
+fn run_validate() -> ExitCode {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+    let report = full_readiness();
+    print_validate_human(&report);
+    if report.ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
 }
 
 async fn handle_line(
@@ -93,8 +112,7 @@ async fn handle_connection(
         }
         let response = handle_line(&line, &runtime, &orchestrator).await;
         if writer
-            .write_all(format!("{response}
-").as_bytes())
+            .write_all(format!("{response}\n").as_bytes())
             .await
             .is_err()
         {
@@ -104,21 +122,47 @@ async fn handle_connection(
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
+    if wants_validate() {
+        return run_validate();
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    let report = full_readiness();
+    log_readiness(&report);
+
     let path = socket_path();
     if path.exists() {
+        tracing::warn!(socket = %path.display(), "removing stale socket file");
         let _ = std::fs::remove_file(&path);
     }
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).expect("create socket dir");
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            tracing::error!(error = %e, path = %parent.display(), "cannot create socket directory");
+            return ExitCode::from(2);
+        }
     }
 
-    let listener = UnixListener::bind(&path).expect("bind unix socket");
-    info!(socket = %path.display(), "rmngd listening (orchestration auto-continue enabled)");
+    let listener = match UnixListener::bind(&path) {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!(error = %e, socket = %path.display(), "bind failed");
+            return ExitCode::from(2);
+        }
+    };
+    info!(
+        socket = %path.display(),
+        auto_continue_max = report
+            .checks
+            .iter()
+            .find(|c| c.id == "auto_continue")
+            .map(|c| c.message.as_str())
+            .unwrap_or("default"),
+        "rmngd listening"
+    );
 
     let runtime = Arc::new(
         Runtime::bootstrap().unwrap_or_else(|e| {
@@ -127,10 +171,7 @@ async fn main() {
         }),
     );
     let router = AgentRouter::load();
-    let orchestrator = Arc::new(DaemonOrchestrator::new(
-        (*runtime).clone(),
-        router,
-    ));
+    let orchestrator = Arc::new(DaemonOrchestrator::new((*runtime).clone(), router));
 
     loop {
         let (stream, _) = listener.accept().await.expect("accept");

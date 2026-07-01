@@ -14,6 +14,7 @@ pub mod orchestration;
 pub mod continuation;
 pub mod ipc;
 pub mod permission;
+pub mod readiness;
 pub mod registry;
 pub mod response;
 pub mod session;
@@ -29,6 +30,9 @@ pub use audit::{
 pub use rmng_mcp::{
     is_high_risk_mcp_server, IsolationLimits, IsolationReport, McpCallResult, ResourceMetrics,
     PROFILE_BASIC, PROFILE_E2B, PROFILE_PLAYWRIGHT,
+};
+pub use readiness::{
+    agent_registry_check, CheckLevel, ReadinessCheck, ReadinessReport,
 };
 pub use registry::{IntegrationManifest, IntegrationRegistry, ToolManifest};
 pub use session::{
