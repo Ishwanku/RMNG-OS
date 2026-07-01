@@ -50,7 +50,8 @@ fn factory_builds_openai_with_inline_key() {
 fn defaults_cover_major_providers() {
     assert_eq!(default_endpoint(LlmProvider::Grok).unwrap(), "https://api.x.ai/v1");
     assert_eq!(default_model(LlmProvider::OpenAi), "gpt-4o");
-    assert_eq!(default_model(LlmProvider::Grok), "grok-4.3");
+    let grok_model = default_model(LlmProvider::Grok);
+    assert!(grok_model.starts_with("grok-"));
 }
 
 #[test]

@@ -1,4 +1,6 @@
-# LLM Providers (Sprint 6)
+# LLM Providers (Sprint 6+)
+
+> **Configuration guide:** [llm-configuration.md](./llm-configuration.md) — catalog-driven models, profiles, and CLI setup (no rebuild when models change).
 
 RMNG-OS nervous system uses a **pluggable provider abstraction** in `rmng-nervous/src/providers/`. All providers emit the same v2 `CoreIntent` JSON — the body (`rmngd`) never changes.
 
@@ -43,7 +45,7 @@ timeout_secs = 120
 | `openai` | `https://api.openai.com/v1` | `gpt-4o` | `OPENAI_API_KEY` |
 | `grok` | `https://api.x.ai/v1` | `grok-4.3` | `XAI_API_KEY` |
 | `anthropic` | `https://api.anthropic.com` | `claude-3-5-sonnet-20241022` | `ANTHROPIC_API_KEY` |
-| `google` | `https://generativelanguage.googleapis.com` | `gemini-2.0-flash` | `GOOGLE_API_KEY` |
+| `google` | `https://generativelanguage.googleapis.com` | `gemini-3.5-flash` | `GOOGLE_API_KEY` |
 | `groq` | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | `GROQ_API_KEY` |
 | `together` | `https://api.together.xyz/v1` | `meta-llama/Llama-3-8b-chat-hf` | `TOGETHER_API_KEY` |
 | `fireworks` | `https://api.fireworks.ai/inference/v1` | (see defaults) | `FIREWORKS_API_KEY` |
@@ -144,10 +146,14 @@ See also: [llm-provider-matrix.md](./llm-provider-matrix.md).
 ## CLI commands
 
 ```bash
-rmng llm list      # all supported providers
-rmng llm health    # detailed probe of configured provider
-rmng llm matrix    # validate Grok/OpenAI/Groq/Google/Ollama via env keys
-rmng observe       # includes llm health summary
+rmng llm show      # active config + catalog path
+rmng llm providers # catalog-driven provider list
+rmng llm models --provider google
+rmng llm use <profile>
+rmng llm setup     # install catalog to ~/.rmng/
+rmng llm health
+rmng llm matrix
+rmng observe
 ```
 
 ## Adding a new provider

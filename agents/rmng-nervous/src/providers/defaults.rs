@@ -1,6 +1,7 @@
+use super::catalog::{catalog_api_key_env, catalog_default_model, catalog_endpoint};
 use rmng_core::{LlmConfig, LlmProvider};
 
-pub fn default_endpoint(provider: LlmProvider) -> Option<&'static str> {
+fn static_endpoint(provider: LlmProvider) -> Option<&'static str> {
     match provider {
         LlmProvider::Ollama => Some("http://127.0.0.1:11434"),
         LlmProvider::OpenAi => Some("https://api.openai.com/v1"),
@@ -17,13 +18,13 @@ pub fn default_endpoint(provider: LlmProvider) -> Option<&'static str> {
     }
 }
 
-pub fn default_model(provider: LlmProvider) -> &'static str {
+fn static_model(provider: LlmProvider) -> &'static str {
     match provider {
         LlmProvider::Ollama => "llama3.2",
         LlmProvider::OpenAi => "gpt-4o",
         LlmProvider::Grok => "grok-4.3",
-        LlmProvider::Anthropic => "claude-3-5-sonnet-20241022",
-        LlmProvider::Google => "gemini-2.0-flash",
+        LlmProvider::Anthropic => "claude-3-5-haiku-20241022",
+        LlmProvider::Google => "gemini-3.5-flash",
         LlmProvider::Groq => "llama-3.3-70b-versatile",
         LlmProvider::Together => "meta-llama/Llama-3-8b-chat-hf",
         LlmProvider::Fireworks => "accounts/fireworks/models/llama-v3p1-8b-instruct",
@@ -34,7 +35,7 @@ pub fn default_model(provider: LlmProvider) -> &'static str {
     }
 }
 
-pub fn default_api_key_env(provider: LlmProvider) -> Option<&'static str> {
+fn static_api_key_env(provider: LlmProvider) -> Option<&'static str> {
     match provider {
         LlmProvider::OpenAi => Some("OPENAI_API_KEY"),
         LlmProvider::Grok => Some("XAI_API_KEY"),
@@ -50,6 +51,21 @@ pub fn default_api_key_env(provider: LlmProvider) -> Option<&'static str> {
     }
 }
 
+/// Endpoint from `config/llm-catalog.toml` (or static fallback).
+pub fn default_endpoint(provider: LlmProvider) -> Option<String> {
+    catalog_endpoint(provider).or_else(|| static_endpoint(provider).map(str::to_string))
+}
+
+/// Model id from catalog default entry (or static fallback).
+pub fn default_model(provider: LlmProvider) -> String {
+    catalog_default_model(provider).unwrap_or_else(|| static_model(provider).to_string())
+}
+
+/// API key env var from catalog (or static fallback).
+pub fn default_api_key_env(provider: LlmProvider) -> Option<String> {
+    catalog_api_key_env(provider).or_else(|| static_api_key_env(provider).map(str::to_string))
+}
+
 /// Resolve API key from inline config or environment variable.
 pub fn resolve_api_key(cfg: &LlmConfig) -> Result<Option<String>, String> {
     if let Some(key) = &cfg.api_key {
@@ -60,7 +76,7 @@ pub fn resolve_api_key(cfg: &LlmConfig) -> Result<Option<String>, String> {
     }
     let env_name = cfg
         .api_key_env_var
-        .as_deref()
+        .clone()
         .or_else(|| default_api_key_env(cfg.llm_provider));
     Ok(env_name.and_then(|name| std::env::var(name).ok()))
 }

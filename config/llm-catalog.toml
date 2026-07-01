@@ -1,0 +1,292 @@
+# RMNG-OS LLM catalog — edit this file when providers ship new models.
+# No Rust rebuild required. Copy to ~/.rmng/llm-catalog.toml to override repo defaults.
+#
+# Docs: docs/llm-configuration.md
+
+[catalog]
+version = "2026.07"
+updated = "2026-07-01"
+notes = "Model IDs are provider API strings. Specialized models are listed but not used for core-intent JSON by default."
+
+# ---------------------------------------------------------------------------
+# Google Gemini — https://ai.google.dev/gemini-api/docs
+# ---------------------------------------------------------------------------
+[providers.google]
+label = "Google Gemini"
+api_style = "google"
+default_endpoint = "https://generativelanguage.googleapis.com"
+api_key_env = "GOOGLE_API_KEY"
+docs_url = "https://ai.google.dev/gemini-api/docs/models"
+
+[[providers.google.models]]
+id = "gemini-3.5-flash"
+tier = "3.x"
+description = "Default production — fast agentic workflows, near-Pro intelligence"
+default = true
+
+[[providers.google.models]]
+id = "gemini-3.1-pro-preview"
+tier = "3.x"
+description = "Flagship deep reasoning and research"
+
+[[providers.google.models]]
+id = "gemini-3.1-flash-lite"
+tier = "3.x"
+description = "Ultra-fast, budget classification and extraction"
+
+[[providers.google.models]]
+id = "gemini-2.5-pro"
+tier = "2.5"
+description = "Stable premium reasoning"
+
+[[providers.google.models]]
+id = "gemini-2.5-flash"
+tier = "2.5"
+description = "Stable price/performance for high volume"
+
+[[providers.google.models]]
+id = "gemini-2.5-flash-lite"
+tier = "2.5"
+description = "Budget multimodal for repetitive ops"
+
+[[providers.google.models]]
+id = "gemini-3.1-flash-image"
+tier = "media"
+description = "Image generation (Nano Banana 2)"
+specialized = true
+
+[[providers.google.models]]
+id = "gemini-3-pro-image"
+tier = "media"
+description = "High-fidelity image generation (Nano Banana Pro)"
+specialized = true
+
+[[providers.google.models]]
+id = "gemini-3.1-flash-live-preview"
+tier = "audio"
+description = "Real-time audio-to-audio live agents"
+specialized = true
+
+[[providers.google.models]]
+id = "gemini-2.5-flash-tts-preview"
+tier = "audio"
+description = "Text-to-speech narration"
+specialized = true
+
+[[providers.google.models]]
+id = "gemini-embedding-2-preview"
+tier = "embedding"
+description = "Multimodal embeddings for RAG"
+specialized = true
+
+# ---------------------------------------------------------------------------
+# xAI Grok — https://docs.x.ai
+# ---------------------------------------------------------------------------
+[providers.grok]
+label = "xAI Grok"
+api_style = "openai_compat"
+default_endpoint = "https://api.x.ai/v1"
+api_key_env = "XAI_API_KEY"
+key_prefix_hint = "xai-"
+docs_url = "https://docs.x.ai/developers/models"
+
+[[providers.grok.models]]
+id = "grok-4.3"
+tier = "frontier"
+description = "Latest default chat model"
+default = true
+
+[[providers.grok.models]]
+id = "grok-4"
+tier = "stable"
+description = "Stable Grok 4"
+
+[[providers.grok.models]]
+id = "grok-3"
+tier = "legacy"
+description = "Previous generation"
+
+# ---------------------------------------------------------------------------
+# OpenAI — https://platform.openai.com/docs/models
+# ---------------------------------------------------------------------------
+[providers.openai]
+label = "OpenAI"
+api_style = "openai_compat"
+default_endpoint = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+key_prefix_hint = "sk-"
+docs_url = "https://platform.openai.com/docs/models"
+
+[[providers.openai.models]]
+id = "gpt-4o"
+tier = "production"
+description = "General production default"
+default = true
+
+[[providers.openai.models]]
+id = "gpt-4o-mini"
+tier = "economy"
+description = "Lower cost intent routing"
+
+[[providers.openai.models]]
+id = "o1"
+tier = "reasoning"
+description = "Deep reasoning (higher cost)"
+
+# ---------------------------------------------------------------------------
+# Anthropic — https://docs.anthropic.com/en/docs/about-claude/models
+# ---------------------------------------------------------------------------
+[providers.anthropic]
+label = "Anthropic Claude"
+api_style = "anthropic"
+default_endpoint = "https://api.anthropic.com"
+api_key_env = "ANTHROPIC_API_KEY"
+key_prefix_hint = "sk-ant-"
+docs_url = "https://docs.anthropic.com/en/docs/about-claude/models"
+
+[[providers.anthropic.models]]
+id = "claude-3-5-haiku-20241022"
+tier = "economy"
+description = "Fast, low-cost intent JSON (recommended for RMNG)"
+default = true
+
+[[providers.anthropic.models]]
+id = "claude-3-5-sonnet-20241022"
+tier = "production"
+description = "Balanced reasoning"
+
+[[providers.anthropic.models]]
+id = "claude-3-opus-20240229"
+tier = "premium"
+description = "Maximum capability (expensive)"
+
+# ---------------------------------------------------------------------------
+# Groq — https://console.groq.com/docs/models
+# ---------------------------------------------------------------------------
+[providers.groq]
+label = "Groq"
+api_style = "openai_compat"
+default_endpoint = "https://api.groq.com/openai/v1"
+api_key_env = "GROQ_API_KEY"
+key_prefix_hint = "gsk_"
+docs_url = "https://console.groq.com/docs/models"
+
+[[providers.groq.models]]
+id = "llama-3.3-70b-versatile"
+tier = "production"
+description = "Default fast inference"
+default = true
+
+[[providers.groq.models]]
+id = "llama-3.1-8b-instant"
+tier = "economy"
+description = "Ultra-fast small model"
+
+# ---------------------------------------------------------------------------
+# Ollama (local) — https://github.com/ollama/ollama/blob/main/docs/api.md
+# ---------------------------------------------------------------------------
+[providers.ollama]
+label = "Ollama (local)"
+api_style = "ollama"
+default_endpoint = "http://127.0.0.1:11434"
+docs_url = "https://github.com/ollama/ollama/blob/main/docs/api.md"
+notes = "Run: ollama pull <model>. List local: ollama list"
+
+[[providers.ollama.models]]
+id = "llama3.2"
+tier = "local"
+description = "Default local general model"
+default = true
+
+[[providers.ollama.models]]
+id = "llama3.3"
+tier = "local"
+description = "Newer Llama 3.3"
+
+[[providers.ollama.models]]
+id = "mistral"
+tier = "local"
+description = "Mistral 7B"
+
+[[providers.ollama.models]]
+id = "qwen2.5"
+tier = "local"
+description = "Qwen 2.5"
+
+[[providers.ollama.models]]
+id = "deepseek-r1"
+tier = "local"
+description = "Local reasoning model"
+
+# ---------------------------------------------------------------------------
+# Together, Fireworks, DeepSeek, NVIDIA NIM, Custom
+# ---------------------------------------------------------------------------
+[providers.together]
+label = "Together AI"
+api_style = "openai_compat"
+default_endpoint = "https://api.together.xyz/v1"
+api_key_env = "TOGETHER_API_KEY"
+docs_url = "https://docs.together.ai/docs/chat-models"
+
+[[providers.together.models]]
+id = "meta-llama/Llama-3-8b-chat-hf"
+default = true
+description = "Default Together chat"
+
+[providers.fireworks]
+label = "Fireworks AI"
+api_style = "openai_compat"
+default_endpoint = "https://api.fireworks.ai/inference/v1"
+api_key_env = "FIREWORKS_API_KEY"
+docs_url = "https://docs.fireworks.ai/guides/querying-text-models"
+
+[[providers.fireworks.models]]
+id = "accounts/fireworks/models/llama-v3p1-8b-instruct"
+default = true
+description = "Default Fireworks instruct"
+
+[providers.deepseek]
+label = "DeepSeek"
+api_style = "openai_compat"
+default_endpoint = "https://api.deepseek.com/v1"
+api_key_env = "DEEPSEEK_API_KEY"
+docs_url = "https://api-docs.deepseek.com"
+
+[[providers.deepseek.models]]
+id = "deepseek-chat"
+default = true
+description = "DeepSeek chat"
+
+[providers.nvidia_nim]
+label = "NVIDIA NIM"
+api_style = "openai_compat"
+default_endpoint = "https://integrate.api.nvidia.com/v1"
+api_key_env = "NVIDIA_API_KEY"
+docs_url = "https://docs.nvidia.com/nim/"
+
+[[providers.nvidia_nim.models]]
+id = "meta/llama3-8b-instruct"
+default = true
+description = "Default NIM instruct"
+
+[providers.custom]
+label = "Custom OpenAI-compatible"
+api_style = "openai_compat"
+api_key_env = "RMNG_LLM_API_KEY"
+docs_url = "https://github.com/ollama/ollama/blob/main/docs/openai.md"
+notes = "vLLM, LM Studio, Ollama /v1, etc. Set endpoint_url in config."
+
+[[providers.custom.models]]
+id = "gpt-4o"
+default = true
+description = "Placeholder — set model to your served model id"
+
+[providers.none]
+label = "Mock (no LLM)"
+api_style = "mock"
+docs_url = "docs/llm-providers.md"
+
+[[providers.none.models]]
+id = "mock"
+default = true
+description = "Deterministic mock intents"

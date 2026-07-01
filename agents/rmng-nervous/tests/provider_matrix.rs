@@ -22,7 +22,7 @@ async fn matrix_grok_live() {
     }
     let cfg = LlmConfig {
         llm_provider: LlmProvider::Grok,
-        model: Some(default_model(LlmProvider::Grok).into()),
+        model: Some(default_model(LlmProvider::Grok)),
         api_key_env_var: Some("XAI_API_KEY".into()),
         ..Default::default()
     };

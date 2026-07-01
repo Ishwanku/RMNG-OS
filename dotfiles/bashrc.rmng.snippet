@@ -3,6 +3,12 @@ export RMNG_PROJECT_ROOT="${HOME}/dev/projects/RMNG-OS"
 export RMNG_HOME="${HOME}/.rmng"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 
+# Local API keys (chmod 600) — never commit
+if [[ -f "${RMNG_HOME}/secrets.env" ]]; then
+  # shellcheck source=/dev/null
+  source "${RMNG_HOME}/secrets.env"
+fi
+
 # Kernel build (if kernel-env not already sourced)
 alias kenv='source ~/scripts/kernel-env.sh'
 alias kbuild='~/scripts/rmng-build.sh'

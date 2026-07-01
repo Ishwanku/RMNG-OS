@@ -1,45 +1,59 @@
 # RMNG-OS BYO-LLM configuration
 # Install: cp config/rmng-config.toml.example ~/.rmng/config.toml
+# Model catalog (edit without rebuild): config/llm-catalog.toml
+# Docs: docs/llm-configuration.md
+
+# Optional: active profile name (must be at root — not under [llm])
+# profile = "gemini-fast"
 
 [llm]
-# Provider: none | ollama | openai | grok | anthropic | google | groq | together | fireworks | deepseek | nvidia_nim | custom
 llm_provider = "none"
 
-# Model (provider-specific default if omitted)
-# model = "llama3.2"
+# Model id (see: rmng llm models --provider <id>)
+# model = "gemini-3.5-flash"
 
-# API key via environment variable (recommended)
-# api_key_env_var = "OPENAI_API_KEY"
+# API key via environment (recommended)
+# api_key_env_var = "GOOGLE_API_KEY"
 
-# Inline API key (discouraged — use env vars in production)
-# api_key = ""
-
-# Override default endpoint (required for custom / self-hosted)
 # endpoint_url = "http://127.0.0.1:11434"
-
-# Retry and timeout for API providers
 # max_retries = 2
 # timeout_secs = 120
 
-# --- Examples (uncomment one block) ---
+# Named profiles — switch with: rmng llm use <name>
 
-# [llm]
-# llm_provider = "ollama"
-# endpoint_url = "http://127.0.0.1:11434"
-# model = "llama3.2"
+[[profiles]]
+name = "gemini-fast"
+llm_provider = "google"
+model = "gemini-3.5-flash"
+api_key_env_var = "GOOGLE_API_KEY"
 
-# [llm]
-# llm_provider = "grok"
-# model = "grok-4.3"
-# api_key_env_var = "XAI_API_KEY"
+[[profiles]]
+name = "gemini-reasoning"
+llm_provider = "google"
+model = "gemini-3.1-pro-preview"
+api_key_env_var = "GOOGLE_API_KEY"
 
-# [llm]
-# llm_provider = "openai"
-# model = "gpt-4o"
-# api_key_env_var = "OPENAI_API_KEY"
+[[profiles]]
+name = "grok-frontier"
+llm_provider = "grok"
+model = "grok-4.3"
+api_key_env_var = "XAI_API_KEY"
 
-# [llm]
-# llm_provider = "custom"
-# endpoint_url = "http://localhost:8000/v1"
-# model = "my-model"
-# api_key_env_var = "RMNG_LLM_API_KEY"
+[[profiles]]
+name = "anthropic-economy"
+llm_provider = "anthropic"
+model = "claude-3-5-haiku-20241022"
+api_key_env_var = "ANTHROPIC_API_KEY"
+max_retries = 1
+
+[[profiles]]
+name = "local-ollama"
+llm_provider = "ollama"
+endpoint_url = "http://127.0.0.1:11434"
+model = "llama3.2"
+
+[[profiles]]
+name = "groq-fast"
+llm_provider = "groq"
+model = "llama-3.3-70b-versatile"
+api_key_env_var = "GROQ_API_KEY"

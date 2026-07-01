@@ -1,6 +1,7 @@
 //! Pluggable LLM provider adapters for the nervous system (Sprint 5).
 
 mod anthropic;
+mod catalog;
 mod defaults;
 mod factory;
 mod google;
@@ -12,6 +13,10 @@ mod reason;
 mod types;
 
 pub use anthropic::AnthropicProvider;
+pub use catalog::{
+    catalog_path, install_user_catalog, list_all_providers, list_catalog_models, load_catalog,
+    ModelEntry, ProviderEntry,
+};
 pub use defaults::{
     default_api_key_env, default_endpoint, default_model, provider_label, resolve_api_key,
 };

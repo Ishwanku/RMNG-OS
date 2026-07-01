@@ -1125,6 +1125,7 @@ dependencies = [
  "rmng-nervous",
  "serde_json",
  "tokio",
+ "toml",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1168,6 +1169,7 @@ dependencies = [
  "serde_yaml",
  "thiserror",
  "tokio",
+ "toml",
  "tracing",
  "uuid",
 ]

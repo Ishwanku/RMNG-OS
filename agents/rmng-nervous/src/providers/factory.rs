@@ -23,11 +23,11 @@ impl LlmBackend {
         let endpoint = cfg
             .endpoint_url
             .clone()
-            .or_else(|| default_endpoint(cfg.llm_provider).map(str::to_string));
+            .or_else(|| default_endpoint(cfg.llm_provider));
         let model = cfg
             .model
             .clone()
-            .unwrap_or_else(|| default_model(cfg.llm_provider).to_string());
+            .unwrap_or_else(|| default_model(cfg.llm_provider));
         let timeout = cfg.timeout_secs;
         let retries = cfg.max_retries;
 
@@ -70,9 +70,7 @@ impl LlmBackend {
             }
             LlmProvider::Anthropic => {
                 let url = endpoint.unwrap_or_else(|| {
-                    default_endpoint(LlmProvider::Anthropic)
-                        .unwrap()
-                        .to_string()
+                    default_endpoint(LlmProvider::Anthropic).unwrap_or_default()
                 });
                 let api_key = resolve_api_key(cfg)
                     .map_err(ProviderError::Misconfigured)?
@@ -87,9 +85,7 @@ impl LlmBackend {
             }
             LlmProvider::Google => {
                 let url = endpoint.unwrap_or_else(|| {
-                    default_endpoint(LlmProvider::Google)
-                        .unwrap()
-                        .to_string()
+                    default_endpoint(LlmProvider::Google).unwrap_or_default()
                 });
                 let api_key = resolve_api_key(cfg)
                     .map_err(ProviderError::Misconfigured)?
@@ -154,23 +150,22 @@ pub struct HealthReport {
 }
 
 pub async fn health_check_detailed(cfg: &RmngConfig) -> Result<HealthReport, ProviderError> {
-    let label = provider_label(cfg.llm.llm_provider);
-    let model = cfg
-        .llm
+    let llm = cfg.resolved_llm();
+    let label = provider_label(llm.llm_provider);
+    let model = llm
         .model
         .clone()
-        .unwrap_or_else(|| default_model(cfg.llm.llm_provider).to_string());
-    let endpoint = cfg
-        .llm
+        .unwrap_or_else(|| default_model(llm.llm_provider));
+    let endpoint = llm
         .endpoint_url
         .clone()
-        .or_else(|| default_endpoint(cfg.llm.llm_provider).map(str::to_string));
-    let api_key_set = super::defaults::resolve_api_key(&cfg.llm)
+        .or_else(|| default_endpoint(llm.llm_provider));
+    let api_key_set = super::defaults::resolve_api_key(&llm)
         .ok()
         .flatten()
         .is_some();
 
-    if cfg.llm.is_mock() {
+    if llm.is_mock() {
         return Ok(HealthReport {
             provider_id: label.to_string(),
             healthy: true,
@@ -181,7 +176,7 @@ pub async fn health_check_detailed(cfg: &RmngConfig) -> Result<HealthReport, Pro
         });
     }
 
-    if !api_key_set && cfg.llm.llm_provider != LlmProvider::Ollama {
+    if !api_key_set && llm.llm_provider != LlmProvider::Ollama {
         return Ok(HealthReport {
             provider_id: label.to_string(),
             healthy: false,
@@ -190,16 +185,15 @@ pub async fn health_check_detailed(cfg: &RmngConfig) -> Result<HealthReport, Pro
             api_key_set: false,
             detail: format!(
                 "API key missing — export {} or set api_key_env_var in config",
-                cfg.llm
-                    .api_key_env_var
-                    .as_deref()
-                    .or_else(|| super::defaults::default_api_key_env(cfg.llm.llm_provider))
-                    .unwrap_or("RMNG_LLM_API_KEY")
+                llm.api_key_env_var
+                    .clone()
+                    .or_else(|| super::defaults::default_api_key_env(llm.llm_provider))
+                    .unwrap_or_else(|| "RMNG_LLM_API_KEY".into())
             ),
         });
     }
 
-    let backend = LlmBackend::from_config(&cfg.llm)?;
+    let backend = LlmBackend::from_config(&llm)?;
     match backend {
         Some(b) => {
             let (healthy, detail) = match b.health().await {

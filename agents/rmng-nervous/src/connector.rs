@@ -76,7 +76,8 @@ impl NervousConnector {
             skill_name,
         };
 
-        if self.config.llm.is_mock() {
+        let llm = self.config.resolved_llm();
+        if llm.is_mock() {
             return Ok(mock_core_intent(
                 prompt,
                 skill_name,
@@ -86,7 +87,7 @@ impl NervousConnector {
             ));
         }
 
-        let backend = LlmBackend::from_config(&self.config.llm)?;
+        let backend = LlmBackend::from_config(&llm)?;
         match backend {
             Some(b) => Ok(b.reason_core(&assembled, &llm_ctx).await?),
             None => Ok(mock_core_intent(
@@ -100,6 +101,6 @@ impl NervousConnector {
     }
 
     pub fn provider_label(&self) -> &'static str {
-        provider_label(self.config.llm.llm_provider)
+        provider_label(self.config.resolved_llm().llm_provider)
     }
 }

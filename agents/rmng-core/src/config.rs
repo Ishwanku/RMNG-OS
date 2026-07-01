@@ -76,10 +76,63 @@ impl LlmConfig {
     }
 }
 
+/// Parse provider id from CLI/config strings (`grok`, `google`, …).
+pub fn parse_provider_str(s: &str) -> Result<LlmProviderKind, String> {
+    let wrapped = format!(r#"llm_provider = "{s}""#);
+    #[derive(Deserialize)]
+    struct Wrap {
+        llm_provider: LlmProviderKind,
+    }
+    let raw = format!("[llm]\n{wrapped}");
+    toml::from_str::<RmngConfig>(&raw)
+        .map(|c| c.llm.llm_provider)
+        .map_err(|e| format!("unknown provider '{s}': {e}"))
+}
+
+/// Named LLM preset — switch with `[llm] profile = "name"` or `rmng llm use <name>`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LlmProfile {
+    pub name: String,
+    #[serde(default)]
+    pub llm_provider: Option<LlmProviderKind>,
+    pub endpoint_url: Option<String>,
+    pub api_key_env_var: Option<String>,
+    pub model: Option<String>,
+    pub max_retries: Option<u32>,
+    pub timeout_secs: Option<u64>,
+}
+
+impl LlmProfile {
+    pub fn apply_to(&self, base: &mut LlmConfig) {
+        if let Some(p) = self.llm_provider {
+            base.llm_provider = p;
+        }
+        if let Some(v) = &self.endpoint_url {
+            base.endpoint_url = Some(v.clone());
+        }
+        if let Some(v) = &self.api_key_env_var {
+            base.api_key_env_var = Some(v.clone());
+        }
+        if let Some(v) = &self.model {
+            base.model = Some(v.clone());
+        }
+        if let Some(v) = self.max_retries {
+            base.max_retries = v;
+        }
+        if let Some(v) = self.timeout_secs {
+            base.timeout_secs = v;
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RmngConfig {
     #[serde(default)]
     pub llm: LlmConfig,
+    /// Active profile name from `[[llm.profiles]]`.
+    pub profile: Option<String>,
+    #[serde(default)]
+    pub profiles: Vec<LlmProfile>,
 }
 
 impl RmngConfig {
@@ -103,7 +156,41 @@ impl RmngConfig {
     }
 
     pub fn llm_configured(&self) -> bool {
-        !self.llm.is_mock()
+        !self.resolved_llm().is_mock()
+    }
+
+    /// Merge `[llm]` with active `profile` (if set).
+    pub fn resolved_llm(&self) -> LlmConfig {
+        let mut out = self.llm.clone();
+        if let Some(name) = &self.profile {
+            if let Some(p) = self.profiles.iter().find(|p| p.name == *name) {
+                p.apply_to(&mut out);
+            }
+        }
+        out
+    }
+
+    /// Apply one-off overrides (CLI flags) on top of resolved config.
+    pub fn with_llm_overrides(
+        &self,
+        provider: Option<LlmProviderKind>,
+        model: Option<String>,
+        profile: Option<String>,
+    ) -> RmngConfig {
+        let mut cfg = self.clone();
+        if let Some(name) = profile {
+            cfg.profile = Some(name);
+        }
+        let mut llm = cfg.resolved_llm();
+        if let Some(p) = provider {
+            llm.llm_provider = p;
+        }
+        if let Some(m) = model {
+            llm.model = Some(m);
+        }
+        cfg.llm = llm;
+        cfg.profile = None;
+        cfg
     }
 }
 
@@ -157,5 +244,25 @@ model = "gpt-4o"
         let cfg = RmngConfig::default();
         assert_eq!(cfg.llm.llm_provider, LlmProviderKind::None);
         assert!(!cfg.llm_configured());
+    }
+
+    #[test]
+    fn resolves_named_profile() {
+        let raw = r#"
+profile = "gemini-fast"
+
+[llm]
+llm_provider = "none"
+
+[[profiles]]
+name = "gemini-fast"
+llm_provider = "google"
+model = "gemini-3.5-flash"
+api_key_env_var = "GOOGLE_API_KEY"
+"#;
+        let cfg: RmngConfig = toml::from_str(raw).unwrap();
+        let llm = cfg.resolved_llm();
+        assert_eq!(llm.llm_provider, LlmProviderKind::Google);
+        assert_eq!(llm.model.as_deref(), Some("gemini-3.5-flash"));
     }
 }

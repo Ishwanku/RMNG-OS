@@ -1,10 +1,12 @@
+mod llm_cmd;
 mod observe;
 
 use clap::{Parser, Subcommand};
 use rmng_core::{
-    daemon_running, parse_incoming, persist_dispatch_to_session, send_intent_json, CoreIntent,
-    HandleResponse, IncomingIntent, Intent, PermissionGate, PermissionVerdict, RmngConfig, Runtime,
-    SessionStore, socket_path, IntentValidator, IntegrationRegistry,
+    daemon_running, parse_incoming, parse_provider_str, persist_dispatch_to_session,
+    send_intent_json, CoreIntent, HandleResponse, IncomingIntent, Intent, PermissionGate,
+    PermissionVerdict, RmngConfig, Runtime, SessionStore, socket_path, IntentValidator,
+    IntegrationRegistry,
 };
 use rmng_nervous::{
     health_check_detailed, list_supported_providers, load_skill, load_skill_index, run_provider_matrix,
@@ -46,6 +48,12 @@ enum Commands {
         session: Option<String>,
         #[arg(long, help = "Produce intent only; do not dispatch to rmngd")]
         dry_run: bool,
+        #[arg(long, help = "Override LLM model id (from catalog or provider docs)")]
+        model: Option<String>,
+        #[arg(long, help = "Override LLM provider (grok, google, anthropic, ollama, …)")]
+        provider: Option<String>,
+        #[arg(long, help = "Use named profile from ~/.rmng/config.toml")]
+        profile: Option<String>,
     },
     /// Multi-agent session management
     Session {
@@ -91,8 +99,23 @@ enum LlmCommands {
     Health,
     /// Run provider validation matrix (uses env API keys)
     Matrix,
-    /// List all supported LLM providers
+    /// List all supported LLM providers (legacy wired list)
     List,
+    /// Show active config, catalog path, and profiles
+    Show,
+    /// List providers from editable llm-catalog.toml
+    Providers,
+    /// List catalog models for a provider (default: active provider)
+    Models {
+        #[arg(long, help = "Provider id: google, grok, anthropic, ollama, …")]
+        provider: Option<String>,
+        #[arg(long, help = "Include image/audio/embedding models")]
+        specialized: bool,
+    },
+    /// Switch active [[llm.profiles]] preset in config
+    Use { name: String },
+    /// Copy repo catalog to ~/.rmng/llm-catalog.toml
+    Setup,
 }
 
 #[derive(Subcommand)]
@@ -120,6 +143,21 @@ enum SessionCommands {
         /// JSON value (e.g. "\"hello\"" or "{\"repo\":\"RMNG-OS\"}")
         value: String,
     },
+}
+
+fn nervous_connector_for_ask(
+    provider: Option<&str>,
+    model: Option<&str>,
+    profile: Option<&str>,
+) -> NervousConnector {
+    let base = RmngConfig::load();
+    let prov = provider.and_then(|s| parse_provider_str(s).ok());
+    let cfg = base.with_llm_overrides(
+        prov,
+        model.map(str::to_string),
+        profile.map(str::to_string),
+    );
+    NervousConnector::from_config(cfg)
 }
 
 fn maybe_persist_session_result(
@@ -331,6 +369,9 @@ async fn main() {
             agent,
             session,
             dry_run,
+            model,
+            provider,
+            profile,
         } => {
             if agent.is_some() && skill.is_some() {
                 eprintln!("use either --agent or --skill, not both");
@@ -338,7 +379,17 @@ async fn main() {
             }
 
             if let Some(agent_id) = agent {
-                let router = AgentRouter::load();
+                let connector = nervous_connector_for_ask(
+                    provider.as_deref(),
+                    model.as_deref(),
+                    profile.as_deref(),
+                );
+                let registry = rmng_nervous::AgentRegistry::load().unwrap_or_else(|e| {
+                    tracing::warn!(error = %e, "agent registry load failed");
+                    rmng_nervous::AgentRegistry::load_from(std::path::Path::new("/nonexistent"))
+                        .unwrap()
+                });
+                let router = AgentRouter::with_registry(registry, connector);
                 match router
                     .ask_routed(session.as_deref(), &agent_id, &prompt)
                     .await
@@ -390,7 +441,11 @@ async fn main() {
                     None => None,
                 };
 
-                let connector = NervousConnector::load();
+                let connector = nervous_connector_for_ask(
+                    provider.as_deref(),
+                    model.as_deref(),
+                    profile.as_deref(),
+                );
                 let skill_ref = loaded_skill.as_ref();
                 let skill_name = skill.as_deref();
                 match connector.reason_core(&prompt, skill_name, skill_ref).await {
@@ -708,6 +763,23 @@ async fn main() {
                 }
                 0
             }
+            LlmCommands::Show => {
+                llm_cmd::print_show();
+                0
+            }
+            LlmCommands::Providers => {
+                llm_cmd::print_providers();
+                0
+            }
+            LlmCommands::Models {
+                provider,
+                specialized,
+            } => {
+                llm_cmd::print_models(provider.as_deref(), specialized);
+                0
+            }
+            LlmCommands::Use { name } => llm_cmd::run_use(&name),
+            LlmCommands::Setup => llm_cmd::run_setup(),
         }
     };
     if code != 0 {

@@ -54,11 +54,11 @@ pub async fn run_provider_matrix() -> Vec<MatrixRow> {
 }
 
 async fn probe_provider(provider: LlmProvider, label: &str) -> MatrixRow {
-    let env_var = default_api_key_env(provider).map(str::to_string);
+    let env_var = default_api_key_env(provider);
     let cfg = LlmConfig {
         llm_provider: provider,
-        endpoint_url: default_endpoint(provider).map(str::to_string),
-        model: Some(default_model(provider).to_string()),
+        endpoint_url: default_endpoint(provider),
+        model: Some(default_model(provider)),
         api_key_env_var: env_var.clone(),
         ..Default::default()
     };

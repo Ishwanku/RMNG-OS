@@ -2,17 +2,21 @@
 
 use rmng_core::{
     daemon_running, persist_dispatch_to_session, send_intent_json, CoreIntent, HandleResponse,
-    PermissionGate, PermissionVerdict, SessionStore,
+    LlmConfig, LlmProvider, PermissionGate, PermissionVerdict, RmngConfig, SessionStore,
 };
 use rmng_nervous::{AgentRouter, RouteOutcome};
 
 fn test_router(store: SessionStore) -> AgentRouter {
     let registry = rmng_nervous::AgentRegistry::load().expect("registry");
-    AgentRouter::with_session_store(
-        registry,
-        rmng_nervous::NervousConnector::load(),
-        store,
-    )
+    let connector = rmng_nervous::NervousConnector::from_config(RmngConfig {
+        llm: LlmConfig {
+            llm_provider: LlmProvider::None,
+            ..Default::default()
+        },
+        profile: None,
+        profiles: vec![],
+    });
+    AgentRouter::with_session_store(registry, connector, store)
 }
 
 #[tokio::test]

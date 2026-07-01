@@ -2,19 +2,27 @@
 
 use rmng_core::{
     build_tool_result_record, daemon_running, persist_dispatch_to_session, send_intent_json,
-    AuditLog, CoreIntent, HandleResponse, SessionStore, ToolResult,
+    AuditLog, CoreIntent, HandleResponse, LlmConfig, LlmProvider, RmngConfig, SessionStore,
+    ToolResult,
 };
 use rmng_nervous::{AgentRouter, RouteOutcome};
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
 
+fn mock_connector() -> rmng_nervous::NervousConnector {
+    rmng_nervous::NervousConnector::from_config(RmngConfig {
+        llm: LlmConfig {
+            llm_provider: LlmProvider::None,
+            ..Default::default()
+        },
+        profile: None,
+        profiles: vec![],
+    })
+}
+
 fn test_router(store: SessionStore) -> AgentRouter {
     let registry = rmng_nervous::AgentRegistry::load().expect("registry");
-    AgentRouter::with_session_store(
-        registry,
-        rmng_nervous::NervousConnector::load(),
-        store,
-    )
+    AgentRouter::with_session_store(registry, mock_connector(), store)
 }
 
 #[tokio::test]
@@ -189,7 +197,7 @@ async fn l4_handoff_dispatches_via_rmngd_when_running() {
     }
     let store = SessionStore::default_store();
     let session = store.create().expect("create");
-    let router = AgentRouter::load();
+    let router = test_router(store.clone());
     let outcome = router
         .ask_routed(Some(&session.id), "swarm-coordinator", "check git status")
         .await
