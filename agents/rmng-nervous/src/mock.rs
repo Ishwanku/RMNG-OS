@@ -78,6 +78,100 @@ fn extract_code_from_prompt(prompt: &str) -> String {
     "print(2 + 2)".to_string()
 }
 
+
+fn default_test_harness() -> String {
+    r#"errors = []
+def check(name, cond):
+    if not cond:
+        errors.append(name)
+check("smoke", 2 + 2 == 4)
+if errors:
+    print({"pass": False, "failed": errors})
+else:
+    print({"pass": True, "tests": 1})"#
+    .to_string()
+}
+
+fn wants_run_tests(lower: &str) -> bool {
+    lower.contains("run tests")
+        || lower.contains("run-tests")
+        || lower.contains("run test")
+        || lower.contains("test harness")
+        || lower.contains("pytest in sandbox")
+}
+
+fn wants_validate_test_output(lower: &str) -> bool {
+    lower.contains("validate output")
+        || lower.contains("validate-output")
+        || lower.contains("validate test")
+        || lower.contains("did the test pass")
+        || lower.contains("check test results")
+}
+
+fn wants_test_coverage_check(lower: &str) -> bool {
+    lower.contains("coverage check")
+        || lower.contains("test-coverage")
+        || lower.contains("test coverage")
+        || lower.contains("coverage rubric")
+}
+
+fn wants_regression_check(lower: &str) -> bool {
+    lower.contains("regression check")
+        || lower.contains("regression-check")
+        || lower.contains("regression test")
+        || lower.contains("did we break")
+}
+
+fn testing_agents(agent_id: &str) -> bool {
+    agent_id == "repo-keeper" || agent_id == "research-curator"
+}
+
+fn handle_testing_workflow(
+    agent_id: &str,
+    lower: &str,
+    prompt: &str,
+    session: Option<&AgentSession>,
+    metadata: Option<Metadata>,
+) -> Option<CoreIntent> {
+    if !testing_agents(agent_id) {
+        return None;
+    }
+    if wants_validate_test_output(lower)
+        || wants_test_coverage_check(lower)
+        || wants_regression_check(lower)
+    {
+        let summary = session
+            .map(|s| s.tool_results_summary(5))
+            .unwrap_or_else(|| "(no prior tool results)".to_string());
+        let kind = if wants_regression_check(lower) {
+            "regression-check"
+        } else if wants_test_coverage_check(lower) {
+            "test-coverage-check"
+        } else {
+            "validate-output"
+        };
+        return Some(CoreIntent::PlanOnly {
+            reasoning: format!(
+                "[{kind}] evaluate sandbox/test evidence.
+Session context:
+{summary}
+User: {prompt}"
+            ),
+            metadata,
+        });
+    }
+    if wants_run_tests(lower) || wants_sandbox_execution(lower) {
+        let code = if wants_run_tests(lower) {
+            default_test_harness()
+        } else {
+            extract_code_from_prompt(prompt)
+        };
+        return Some(e2b_run_code_intent(&code, metadata));
+    }
+    None
+}
+
+
 fn wants_sandbox_execution(lower: &str) -> bool {
     lower.contains("run code")
         || lower.contains("execute code")
@@ -165,6 +259,11 @@ pub fn mock_core_intent(
             };
         }
         if a.id == "research-curator" {
+            if let Some(intent) =
+                handle_testing_workflow(&a.id, &lower, prompt, session, metadata.clone())
+            {
+                return intent;
+            }
             if lower.contains("delete memory") {
                 return CoreIntent::McpProxy {
                     mcp_server: "mem0".into(),
@@ -336,8 +435,10 @@ pub fn mock_core_intent(
             };
         }
         if a.id == "repo-keeper" {
-            if wants_sandbox_execution(&lower) {
-                return e2b_run_code_intent(&extract_code_from_prompt(prompt), metadata);
+            if let Some(intent) =
+                handle_testing_workflow(&a.id, &lower, prompt, session, metadata.clone())
+            {
+                return intent;
             }
             if lower.contains("search memory") || lower.contains("recall memory") {
                 return mem0_search_intent(prompt, metadata);

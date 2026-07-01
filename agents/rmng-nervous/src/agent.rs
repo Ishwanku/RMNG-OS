@@ -338,6 +338,27 @@ mod tests {
         assert_eq!(delegate.id, "repo-keeper");
     }
 
+
+    #[test]
+    fn l3_testing_agents_include_testing_skills() {
+        let reg = fixture_registry();
+        let testing_skills = [
+            "run-tests",
+            "validate-output",
+            "test-coverage-check",
+            "regression-check",
+        ];
+        for id in ["repo-keeper", "research-curator"] {
+            let agent = reg.get(id).expect(id);
+            for skill in testing_skills {
+                assert!(
+                    agent.skills.iter().any(|s| s == skill),
+                    "{id} missing skill {skill}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn l3_sandbox_agents_include_code_execution_skill() {
         let reg = fixture_registry();

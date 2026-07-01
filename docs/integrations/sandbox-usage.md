@@ -24,6 +24,9 @@ tail -1 ~/.rmng/logs/audit.jsonl
 
 ## Workflow: research → memory → evaluation → execution
 
+For full test loops (coverage, regression), see [testing-usage.md](testing-usage.md).
+
+
 1. **Research** — `web-researcher` fetches URL or `research-curator` lists GitHub issues
 2. **Memory** — `search_memories` recalls prior integration decisions
 3. **Evaluation** — `output-validation` + `self-critique` on the synthesis (plan.only)

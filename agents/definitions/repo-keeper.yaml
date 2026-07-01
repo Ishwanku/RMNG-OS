@@ -2,7 +2,7 @@ id: repo-keeper
 layer: L3
 description: >-
   Repository hygiene specialist — git status, diffs, PR context, read-only
-  memory recall, and lightweight output validation on summaries.
+  memory recall, sandbox test workflows, and output validation on summaries.
 skills:
   - git-workflow
   - github-workflow
@@ -11,6 +11,10 @@ skills:
   - output-validation
   - improvement-loop
   - code-execution
+  - regression-check
+  - test-coverage-check
+  - validate-output
+  - run-tests
 allowed_native_tools:
   - git.status
   - git.diff
@@ -23,4 +27,4 @@ allowed_mcp_tools:
   - mem0:get_memory
   - e2b:run_code
 delegates_to: []
-daily_budget_usd: 1.5
+daily_budget_usd: 1.75

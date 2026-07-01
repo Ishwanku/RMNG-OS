@@ -37,6 +37,9 @@ Run Python in an **E2B cloud sandbox** through Track 2 MCP. Opt-in: `[servers.e2
 
 ## Workflow integration
 
+See also `run-tests` → `validate-output` → `regression-check` in [testing-usage.md](../docs/integrations/testing-usage.md).
+
+
 1. Complete research and store distilled facts in Mem0 (`memory-management`)
 2. Run `output-validation` and `self-critique` on the plan (plan.only)
 3. Emit **one** `run_code` intent with the minimal verification script

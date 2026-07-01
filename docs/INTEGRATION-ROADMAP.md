@@ -149,3 +149,14 @@ See [integrations/README.md](integrations/README.md) for per-repo intake records
 | code-execution skill | 3 | safety + testing patterns | ✅ Complete |
 | Agent sandbox scope | L3 | repo-keeper, research-curator | ✅ Complete |
 | Usage docs | — | e2b-mcp.md, sandbox-usage.md | ✅ Complete |
+
+## Sprint 18 Status
+
+| Item | Track | Deliverable | Status |
+|------|-------|-------------|--------|
+| run-tests skill | 3 | E2B harness composition + guards | ✅ Complete |
+| validate-output skill | 3 | Sandbox result gate (plan.only) | ✅ Complete |
+| test-coverage-check skill | 3 | Breadth rubric | ✅ Complete |
+| regression-check skill | 3 | Session/Mem0 baseline compare | ✅ Complete |
+| Agent testing scope | L3 | repo-keeper, research-curator | ✅ Complete |
+| Usage docs | — | testing-usage.md | ✅ Complete |
