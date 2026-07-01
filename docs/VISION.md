@@ -32,7 +32,7 @@
 4. **Agent-native interfaces** — Every integration exposes structured JSON-schema APIs; only the Rust runtime invokes them.
 5. **Workflow-unified** — One orchestration layer across dev, ops, creative, and personal tasks.
 6. **Local-first, cloud-aware** — Ollama default; external APIs pluggable as reasoning backends only.
-7. **Open and documented** — RMNG-OS tooling is MIT; kernel work respects GPLv2.
+7. **Controlled core, documented boundaries** — RMNG runtime and tooling are proprietary; kernel patches are GPLv2; external OSS enters via defined integration tracks (ADR-019).
 
 ## Workflow Domains (planned integrations)
 
@@ -85,7 +85,7 @@ Before any AI layer, we complete:
 
 ## What RMNG-OS Repo Holds Today
 
-This repository is **Layer 1 + planning docs** for Layers 2–4. It does not yet contain agent code — only the kernel lab, configs, scripts, and roadmap.
+This repository spans **Layer 1 (kernel lab)** through **Layer 4 (agent orchestration)** — kernel patches and scripts, plus the proprietary Rust runtime (`agents/`), skills, and integration manifests. Intelligence stays in userspace (nervous system); the kernel provides resources only (Torvalds-style layering).
 
 ## Success Metrics
 

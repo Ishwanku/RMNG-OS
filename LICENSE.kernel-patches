@@ -1,0 +1,31 @@
+RMNG-OS Kernel Patches — GPLv2
+
+The files in the patches/ directory are modifications intended for
+application to the Linux kernel source tree (upstream: GPLv2).
+
+Copyright (c) 2026 Ishwanku
+
+These patch files are derivative works of the Linux kernel and are
+licensed under the GNU General Public License version 2 (GPLv2), the
+same license as the Linux kernel.
+
+You may copy, distribute, and modify these patches under the terms of
+GPLv2. When you distribute a binary that includes kernel code modified
+by these patches, you must provide corresponding source code as required
+by GPLv2.
+
+The Linux kernel source itself is not included in this repository.
+Clone it separately from kernel.org or github.com/torvalds/linux.
+
+For the full GPLv2 text, see:
+https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+---
+
+RELATIONSHIP TO ROOT LICENSE
+
+- patches/  → GPLv2 (this file)
+- All other repository content → Proprietary (see LICENSE at repo root)
+
+Applying patches to your private kernel tree for personal development
+does not by itself require publishing RMNG-OS proprietary runtime code.

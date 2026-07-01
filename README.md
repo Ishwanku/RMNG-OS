@@ -48,7 +48,8 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the full plan.
 ```
 RMNG-OS/
 ├── README.md
-├── LICENSE                         # MIT
+├── LICENSE                         # Proprietary (core runtime + tooling)
+├── LICENSE.kernel-patches          # GPLv2 (patches/ only)
 ├── .gitignore
 ├── scripts/
 │   ├── kernel-env.sh               # KSRC, KBUILD, ccache vars
@@ -205,8 +206,15 @@ code ~/dev/kernel/linux         # kernel source
 | Build output | `~/build/kernel` | ~3–14 GB |
 | ccache | `~/.ccache` | ~1–2 GB |
 
-## License
+## Licensing
 
-MIT License — see [LICENSE](LICENSE).
+RMNG-OS uses a **split license model** (see [ADR-019](docs/decisions/ADR-019-licensing-and-layering.md)):
 
-The Linux kernel source you compile separately is **GPLv2**. This repo contains MIT-licensed tooling only.
+| Component | License |
+|-----------|---------|
+| Core runtime (`agents/`, `rmngd`, nervous system, CLI) | **Proprietary** — [LICENSE](LICENSE) |
+| Scripts, docs, config, skills | **Proprietary** — same as core |
+| Kernel patches (`patches/`) | **GPLv2** — [LICENSE.kernel-patches](LICENSE.kernel-patches) |
+| External OSS (MCP servers, LLM APIs) | Original licenses — consumed via integration tracks |
+
+The Linux kernel source you compile separately is **GPLv2** upstream. This repository does not include kernel source.

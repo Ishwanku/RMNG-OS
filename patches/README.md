@@ -2,6 +2,8 @@
 
 Out-of-tree patch series applied to `~/dev/kernel/linux` before build.
 
+**License:** GPLv2 — see [LICENSE.kernel-patches](../LICENSE.kernel-patches) and [ADR-019](../docs/decisions/ADR-019-licensing-and-layering.md).
+
 ## Series
 
 | # | Patch | Description |

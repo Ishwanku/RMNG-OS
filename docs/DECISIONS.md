@@ -115,7 +115,7 @@ Complete **Layer 1 kernel foundation** before implementing agent runtime.
 ## ADR-007: MIT license for RMNG-OS tooling
 
 **Date:** 2026-06-27  
-**Status:** Accepted
+**Status:** **Superseded** by [ADR-019](decisions/ADR-019-licensing-and-layering.md)
 
 ### Context
 Need open license for scripts, docs, and future agent tooling.
@@ -124,8 +124,27 @@ Need open license for scripts, docs, and future agent tooling.
 MIT license for this repository. Kernel remains GPLv2 separately.
 
 ### Consequences
-- ✅ Permissive reuse of tooling
+- ✅ Permissive reuse of tooling (historical — prior to ADR-019)
 - ⚠️ Kernel patches may need GPLv2 compliance when distributed
+
+---
+
+## ADR-019: Licensing and layering philosophy
+
+**Date:** 2026-07-01  
+**Status:** **Accepted**
+
+### Context
+RMNG-OS core runtime (agents, rmngd, nervous system) requires IP control. MIT (ADR-007) is too permissive. Torvalds-style layering: GPLv2 kernel, intelligence in userspace, proprietary runtime.
+
+### Decision
+Split licensing: **Proprietary** for core runtime + scripts/docs/config; **GPLv2** for `patches/`; external OSS consumed via integration tracks under their own licenses.
+
+### Consequences
+- ✅ Full record: [docs/decisions/ADR-019-licensing-and-layering.md](decisions/ADR-019-licensing-and-layering.md)
+- ✅ ADR-007 superseded
+- ⚠️ Update Cargo.toml workspace license metadata manually
+- ⚠️ Consider private repo if source confidentiality is required
 
 ---
 

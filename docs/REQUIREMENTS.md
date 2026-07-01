@@ -36,7 +36,7 @@ This document defines functional and non-functional requirements for **RMNG-OS**
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [ROADMAP.md](ROADMAP.md)
 - Linux kernel: GPLv2
-- RMNG-OS tooling: MIT
+- RMNG-OS core runtime and tooling: Proprietary (ADR-019)
 
 ---
 
@@ -59,7 +59,7 @@ This document defines functional and non-functional requirements for **RMNG-OS**
 | C-02 | Kernel source **not** vendored in RMNG-OS repo (clone separately) |
 | C-03 | Build artifacts **never** committed to git |
 | C-04 | Work inside WSL for system changes; Windows files only via documented templates |
-| C-05 | Respect GPLv2 for kernel; MIT for RMNG-OS scripts/docs |
+| C-05 | Respect GPLv2 for kernel patches; proprietary license for RMNG-OS core (ADR-019) |
 
 ### 2.3 Assumptions
 

@@ -1,21 +1,61 @@
-MIT License
+RMNG-OS — Proprietary License
 
-Copyright (c) 2026 Ishwanku
+Copyright (c) 2026 Ishwanku. All Rights Reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+NOTICE: This license applies to the RMNG-OS repository except where
+another license file explicitly governs a subdirectory (see
+LICENSE.kernel-patches for kernel patches).
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. GRANT OF RIGHTS
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+   No rights are granted to any person or entity except as expressly
+   authorized in writing by the copyright holder.
+
+2. RESTRICTIONS
+
+   Without prior written permission, you may not:
+
+   - Use, copy, modify, merge, publish, distribute, sublicense, or sell
+     copies of this software or documentation
+   - Create derivative works based on this software
+   - Use this software for commercial purposes
+
+   Personal, non-commercial use by the copyright holder and explicitly
+   authorized collaborators is permitted.
+
+3. COMPONENTS COVERED
+
+   This license applies to, including but not limited to:
+
+   - The Rust agent runtime (agents/, including rmng-core, rmng-nervous,
+     rmng-cli, rmngd, rmng-mcp)
+   - Scripts, configuration, skills, integration manifests, and
+     documentation in this repository
+   - All files not explicitly covered by LICENSE.kernel-patches
+
+4. THIRD-PARTY SOFTWARE
+
+   This project may invoke or depend on third-party open-source software
+   (for example MCP servers, crates.io dependencies, or LLM APIs).
+   Those components remain governed by their respective licenses.
+   Use of third-party software does not grant rights to RMNG-OS core
+   code under this repository's license.
+
+5. KERNEL PATCHES
+
+   Files under patches/ are governed by LICENSE.kernel-patches (GPLv2),
+   consistent with the Linux kernel upstream license.
+
+6. DISCLAIMER
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+   IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+   DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT
+   OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+   OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+7. CONTACT
+
+   For licensing inquiries, contact the repository owner.

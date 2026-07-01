@@ -13,6 +13,10 @@ This document governs how **external open-source repositories** (MCP servers, ag
 
 Every integration must declare which **track** it uses. Mixing tracks without documentation is a governance violation.
 
+### Licensing note (ADR-019)
+
+Consuming external open-source tools (often MIT or Apache-2.0) via **Track 2 (MCP Proxy)** or as **dependencies** does **not** require relicensing the RMNG-OS core runtime. The proprietary core remains separate; third-party licenses apply only to those external components and their subprocess boundaries. See [ADR-019](decisions/ADR-019-licensing-and-layering.md).
+
 ---
 
 ## 2. Four Integration Tracks
