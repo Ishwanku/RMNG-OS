@@ -1,3 +1,4 @@
+use crate::orchestration_prompt;
 use serde_yaml::Value;
 use std::path::{Path, PathBuf};
 
@@ -9,24 +10,37 @@ Output ONLY valid JSON matching the v2 core-intent schema with top-level "action
 
 Never output shell commands. Never execute tools directly."#;
 
-const SESSION_ORCHESTRATION_GUIDE: &str = r#"## Multi-agent session orchestration
+const SESSION_ORCHESTRATION_GUIDE: &str = r#"## Multi-agent session orchestration (Sprint 24)
 
-You are operating inside a persistent RMNG session. The Session context block contains:
-- `recent_tool_results` — outputs from prior rmngd executions (read these first)
-- `recent_handoffs` — which agents already worked on this task
-- `shared_context` — operator-provided keys and values
+You are inside a persistent RMNG session. Read the Session context block FIRST:
+- `recent_tool_results` — prior rmngd outputs (check before any tool call)
+- `recent_handoffs` — agents that already worked on this task
+- `orchestration_chain` — multi-hop progress (if present, do NOT restart the chain)
+- `shared_context` — operator-provided keys
 
-Decision rules:
-1. **Continue** — if more work is needed within your allowed tools, emit `tool.execute` or `mcp.proxy`.
-2. **Complete** — if prior results satisfy the request, emit `plan.only` with a concise summary.
-3. **Delegate (single hop)** — set `metadata.handoff_to` and emit `plan.only` with a brief delegation reason.
-4. **Delegate (multi-hop)** — set `metadata.handoff_chain` to an ordered agent list (e.g. `["swarm-coordinator","repo-keeper","runtime-executor"]`). Include yourself as the first id when you are the orchestrator. Optional `metadata.chain_id` correlates the workflow in session context.
-5. **Return to orchestrator** — when your specialist work is done, emit `plan.only` with `metadata.handoff_return_to` set to the orchestrator agent id (e.g. `swarm-coordinator`) and a concise summary referencing `recent_tool_results`.
-6. **Delegate via tool (L4 fallback)** — emit `tool.execute` for the target tool; the router hands off to the right L3/L2 agent.
+### Decision tree
+1. **Need your tools?** → `tool.execute` or `mcp.proxy` (only tools you are allowed).
+2. **Task satisfied?** → `plan.only` with summary citing recent_tool_results.
+3. **One specialist needed?** → `plan.only` + `metadata.handoff_to` (valid agent id).
+4. **Multiple specialists in sequence?** → `plan.only` + `metadata.handoff_chain` (JSON array, min 2 ids).
+5. **Specialist finished?** → `plan.only` + `metadata.handoff_return_to` (usually `swarm-coordinator`).
+6. **L4 fallback** → emit `tool.execute` for the target tool; router delegates to the right agent.
 
-Always include `metadata.session_id` matching the session when a session is active.
-Prefer `handoff_chain` when the task clearly needs multiple specialists in sequence; use `handoff_to` for a single delegation.
-Never repeat a tool call if `recent_tool_results` already contains a successful result for the same tool unless the user explicitly asks to re-run."#;
+### handoff_chain format (strict)
+```json
+{"action":"plan.only","reasoning":"Delegate git workflow.","metadata":{"session_id":"<sid>","handoff_chain":["swarm-coordinator","repo-keeper","runtime-executor"],"chain_id":"<sid>"}}
+```
+- Array of strings only — NOT comma-separated text.
+- First element must be YOUR agent id when you start the chain.
+- chain_id optional but recommended (= session_id).
+
+### handoff_return_to format
+```json
+{"action":"plan.only","reasoning":"Git status captured; returning to orchestrator.","metadata":{"session_id":"<sid>","handoff_return_to":"swarm-coordinator"}}
+```
+
+Always set `metadata.session_id` when a session is active.
+Never re-run a tool that already succeeded in recent_tool_results unless the user explicitly asks."#;
 
 /// Lightweight skill entry for progressive disclosure (index only).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -211,6 +225,7 @@ pub fn assemble_prompt_full(
 
     if let Some(sess) = session {
         parts.push(SESSION_ORCHESTRATION_GUIDE.to_string());
+        parts.push(orchestration_prompt::session_chain_hints(sess, agent));
         let ctx = sess.prompt_context();
         if !ctx.is_empty() {
             parts.push(format!("## Session context\n{ctx}"));
@@ -287,6 +302,7 @@ Do the thing.
         assert!(prompt.contains("hello"));
         assert!(prompt.contains("Session context"));
         assert!(prompt.contains("Multi-agent session orchestration"));
+        assert!(prompt.contains("handoff_chain"));
         let _ = std::fs::remove_dir_all(dir);
     }
 

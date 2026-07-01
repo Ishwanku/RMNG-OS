@@ -1,4 +1,5 @@
 use rmng_core::CoreIntent;
+use serde_json::Value;
 use serde::{Deserialize, Serialize};
 
 /// Session/agent context passed to every provider adapter.
@@ -208,20 +209,73 @@ fn classify_api_error(status: u16, message: &str) -> ProviderErrorKind {
     ProviderErrorKind::Other
 }
 
-/// Parse provider output into a v2 CoreIntent.
-pub fn parse_core_intent(content: &str) -> Result<CoreIntent, ProviderError> {
-    let trimmed = content.trim();
-    // Strip markdown fences if the model wrapped JSON
-    let json = if trimmed.starts_with("```") {
-        trimmed
+/// Extract JSON object from LLM output (fences, prose wrappers).
+pub fn extract_json_payload(content: &str) -> Option<String> {
+    let mut trimmed = content.trim();
+    if trimmed.starts_with("```") {
+        trimmed = trimmed
             .trim_start_matches("```json")
             .trim_start_matches("```")
             .trim_end_matches("```")
-            .trim()
+            .trim();
+    }
+    if serde_json::from_str::<Value>(trimmed).is_ok() {
+        return Some(trimmed.to_string());
+    }
+    let start = trimmed.find('{')?;
+    let end = trimmed.rfind('}')?;
+    if end > start {
+        Some(trimmed[start..=end].to_string())
     } else {
-        trimmed
+        None
+    }
+}
+
+/// Coerce common LLM mistakes in handoff metadata before strict parse.
+pub fn normalize_intent_value(value: &mut Value) {
+    let Some(obj) = value.as_object_mut() else {
+        return;
     };
-    CoreIntent::parse(json).map_err(ProviderError::InvalidIntent)
+    let Some(meta) = obj.get_mut("metadata").and_then(|m| m.as_object_mut()) else {
+        return;
+    };
+    if let Some(chain) = meta.get("handoff_chain").cloned() {
+        if let Some(s) = chain.as_str() {
+            let ids: Vec<Value> = s
+                .split(',')
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(|id| Value::String(id.to_string()))
+                .collect();
+            if ids.len() >= 2 {
+                meta.insert("handoff_chain".into(), Value::Array(ids));
+            }
+        }
+    }
+    for key in ["handoff_to", "handoff_return_to", "handoff_from", "chain_id"] {
+        if let Some(v) = meta.get_mut(key) {
+            if let Some(s) = v.as_str() {
+                *v = Value::String(s.trim().to_string());
+            }
+        }
+    }
+}
+
+/// Parse provider output into a v2 CoreIntent (Sprint 24 — robust extraction).
+pub fn parse_core_intent(content: &str) -> Result<CoreIntent, ProviderError> {
+    use rmng_core::RmngError;
+    let json_str = extract_json_payload(content).ok_or_else(|| {
+        ProviderError::InvalidIntent(RmngError::InvalidIntent(
+            "no JSON object found in LLM output".into(),
+        ))
+    })?;
+    let mut value: Value = serde_json::from_str(&json_str).map_err(|e| {
+        ProviderError::InvalidIntent(RmngError::InvalidIntent(e.to_string()))
+    })?;
+    normalize_intent_value(&mut value);
+    serde_json::from_value(value).map_err(|e| {
+        ProviderError::InvalidIntent(RmngError::InvalidIntent(e.to_string()))
+    })
 }
 
 #[cfg(test)]
@@ -237,6 +291,29 @@ mod tests {
         let billing = ProviderError::api("grok", 403, "insufficient credits for billing");
         assert!(billing.warrants_provider_fallback());
         assert_eq!(billing.kind(), ProviderErrorKind::Billing);
+    }
+
+    #[test]
+    fn parses_handoff_chain_from_comma_string() {
+        let raw = r#"{"action":"plan.only","reasoning":"chain","metadata":{"handoff_chain":"swarm-coordinator, repo-keeper, runtime-executor"}}"#;
+        let intent = parse_core_intent(raw).expect("parse");
+        let chain = intent
+            .metadata()
+            .and_then(|m| m.handoff_chain.as_ref())
+            .expect("chain");
+        assert_eq!(chain.len(), 3);
+        assert_eq!(chain[1], "repo-keeper");
+    }
+
+    #[test]
+    fn extracts_json_from_prose_wrapper() {
+        let raw = r#"Here is the intent:
+```json
+{"action":"plan.only","reasoning":"done","metadata":{"session_id":"abc"}}
+```
+"#;
+        let intent = parse_core_intent(raw).expect("parse");
+        assert!(matches!(intent, CoreIntent::PlanOnly { .. }));
     }
 
     #[test]

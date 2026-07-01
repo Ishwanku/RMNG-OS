@@ -20,6 +20,7 @@ Per-repository evaluation records for open-source AI/agent/MCP projects consider
 | [operations-usage.md](operations-usage.md) | — | Guide | **Active** (Sprint 19–22) |
 | [security-mcp-usage.md](security-mcp-usage.md) | — | Guide | **Active** (Sprint 21) |
 | [end-to-end-workflow.md](end-to-end-workflow.md) | — | Guide | **Active** (Sprint 22) |
+| [orchestration-usage.md](orchestration-usage.md) | — | Guide | **Active** (Sprint 24) |
 | [recommended-agent-setups.md](recommended-agent-setups.md) | — | Guide | **Active** (Sprint 22) |
 | [evaluation-usage.md](evaluation-usage.md) | — | Guide | **Active** (Sprint 16) |
 | [promptfoo-patterns.md](promptfoo-patterns.md) | promptfoo | 3 — Skill | **Active** |

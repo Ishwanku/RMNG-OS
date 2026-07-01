@@ -56,6 +56,13 @@ enum Commands {
         provider: Option<String>,
         #[arg(long, help = "Use named profile from ~/.rmng/config.toml")]
         profile: Option<String>,
+        #[arg(
+            long,
+            help = "Auto-continue: dispatch executable intents and re-ask until plan.only or max steps (requires --session)"
+        )]
+        auto_continue: bool,
+        #[arg(long, default_value = "3", help = "Max auto-continue steps (with --auto-continue)")]
+        max_steps: u32,
     },
     /// Multi-agent session management
     Session {
@@ -211,6 +218,86 @@ fn maybe_persist_session_result(
     if let Err(e) = persist_dispatch_to_session(&store, sid, intent, resp) {
         eprintln!("session write-back: {e}");
     }
+}
+
+
+async fn ask_with_auto_continue(
+    router: &AgentRouter,
+    session_id: &str,
+    start_agent: &str,
+    prompt: &str,
+    max_steps: u32,
+    dry_run: bool,
+) -> i32 {
+    let mut agent_id = start_agent.to_string();
+    let mut step_prompt = prompt.to_string();
+    let mut last_code = 0;
+
+    for step in 0..max_steps {
+        let outcome = match router
+            .ask_routed(Some(session_id), &agent_id, &step_prompt)
+            .await
+        {
+            Ok(o) => o,
+            Err(e) => {
+                eprintln!("agent router (step {}): {e}", step + 1);
+                return 1;
+            }
+        };
+
+        if outcome.is_handoff() {
+            match &outcome {
+                RouteOutcome::HandoffChain { chain, hops, reason, .. } => {
+                    println!("handoff-chain ({reason}): {}", chain.join(" → "));
+                    for hop in hops {
+                        println!(
+                            "  hop: {} → {} — {}",
+                            hop.from_agent, hop.to_agent, hop.reason
+                        );
+                    }
+                }
+                RouteOutcome::Handoff {
+                    from_agent,
+                    to_agent,
+                    from_layer,
+                    to_layer,
+                    reason,
+                    ..
+                } => {
+                    println!(
+                        "handoff: {from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {reason}"
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        let mut intent = outcome.intent();
+        let handoff_from = outcome.handoff_from_agent();
+        AgentRouter::enrich_intent_metadata(&mut intent, Some(session_id), handoff_from);
+
+        let executable = intent.is_executable();
+        last_code = dispatch_core_intent(&intent, dry_run, Some(session_id)).await;
+
+        if !executable {
+            return last_code;
+        }
+        if last_code != 0 {
+            eprintln!("auto-continue: dispatch failed at step {}, stopping", step + 1);
+            return last_code;
+        }
+
+        if let Some(next) = outcome.final_agent() {
+            agent_id = next.to_string();
+        }
+        step_prompt = "Continue the orchestration. If specialist work is complete, emit plan.only with handoff_return_to swarm-coordinator summarizing recent_tool_results. Otherwise execute the next required tool. Do not repeat successful tools.".to_string();
+
+        if step + 1 >= max_steps {
+            println!("auto-continue: reached max steps ({max_steps})");
+            return last_code;
+        }
+    }
+    last_code
 }
 
 async fn dispatch_core_intent(
@@ -409,6 +496,8 @@ async fn main() {
             model,
             provider,
             profile,
+            auto_continue,
+            max_steps,
         } => {
             if agent.is_some() && skill.is_some() {
                 eprintln!("use either --agent or --skill, not both");
@@ -416,6 +505,10 @@ async fn main() {
             }
 
             if let Some(agent_id) = agent {
+                if auto_continue && session.is_none() {
+                    eprintln!("--auto-continue requires --session");
+                    std::process::exit(1);
+                }
                 let connector = nervous_connector_for_ask(
                     provider.as_deref(),
                     model.as_deref(),
@@ -427,6 +520,20 @@ async fn main() {
                         .unwrap()
                 });
                 let router = AgentRouter::with_registry(registry, connector);
+                if auto_continue {
+                    if let Some(ref sid) = session {
+                        let code = ask_with_auto_continue(
+                            &router,
+                            sid,
+                            &agent_id,
+                            &prompt,
+                            max_steps,
+                            dry_run,
+                        )
+                        .await;
+                        std::process::exit(code);
+                    }
+                }
                 match router
                     .ask_routed(session.as_deref(), &agent_id, &prompt)
                     .await

@@ -257,6 +257,38 @@ impl SessionStore {
         self.save(session)
     }
 
+    pub fn record_chain_failure(
+        &self,
+        session: &mut AgentSession,
+        hop_index: usize,
+        from_agent: &str,
+        to_agent: &str,
+        error: &str,
+    ) -> Result<(), SessionError> {
+        if let Some(orch) = session.shared_context.get_mut("orchestration") {
+            if let Some(obj) = orch.as_object_mut() {
+                obj.insert("status".into(), serde_json::json!("failed"));
+                obj.insert("failed_hop".into(), serde_json::json!(hop_index));
+                obj.insert("failed_from".into(), serde_json::json!(from_agent));
+                obj.insert("failed_to".into(), serde_json::json!(to_agent));
+                obj.insert("error".into(), serde_json::json!(error));
+            }
+        } else {
+            session.shared_context.insert(
+                "orchestration".to_string(),
+                serde_json::json!({
+                    "status": "failed",
+                    "failed_hop": hop_index,
+                    "failed_from": from_agent,
+                    "failed_to": to_agent,
+                    "error": error,
+                }),
+            );
+        }
+        session.updated_at = Utc::now();
+        self.save(session)
+    }
+
     pub fn clear_orchestration_state(&self, session: &mut AgentSession) -> Result<(), SessionError> {
         session.shared_context.remove("orchestration");
         session.updated_at = Utc::now();

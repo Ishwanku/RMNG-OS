@@ -8,6 +8,7 @@ Example intents (emit exactly one JSON object):
 {"action":"plan.only","reasoning":"Delegate via chain.","metadata":{"session_id":"<sid>","handoff_chain":["swarm-coordinator","repo-keeper","runtime-executor"]}}
 {"action":"plan.only","reasoning":"Delegate to specialist.","metadata":{"session_id":"<sid>","handoff_to":"repo-keeper"}}
 {"action":"plan.only","reasoning":"Specialist done; return summary.","metadata":{"session_id":"<sid>","handoff_return_to":"swarm-coordinator"}}
+{"action":"plan.only","reasoning":"Git hygiene needs repo then executor.","metadata":{"session_id":"<sid>","handoff_chain":["swarm-coordinator","repo-keeper","runtime-executor"],"chain_id":"<sid>"}}
 "#;
 
 /// Build the final prompt sent to any LLM provider (shared across adapters).
@@ -34,13 +35,22 @@ pub fn build_reasoning_prompt(assembled: &str, ctx: &LlmReasonContext<'_>) -> St
         format!("\n{}\n", hints.join("\n"))
     };
     format!(
-        "{assembled}{hint_block}{INTENT_EXAMPLES}\nRespond with a single JSON object for core-intent v2. No markdown, no prose outside JSON."
+        "{assembled}{hint_block}{INTENT_EXAMPLES}\nHandoff fields (plan.only only): handoff_to (string), handoff_chain (array of strings), handoff_return_to (string), chain_id (string).
+Respond with a single JSON object for core-intent v2. No markdown fences, no prose outside JSON."
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn includes_chain_examples() {
+        let ctx = LlmReasonContext::default();
+        let out = build_reasoning_prompt("## User request\ntest", &ctx);
+        assert!(out.contains("handoff_chain"));
+        assert!(out.contains("handoff_return_to"));
+    }
 
     #[test]
     fn includes_session_id_hint() {

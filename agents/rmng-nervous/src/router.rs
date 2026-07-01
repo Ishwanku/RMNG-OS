@@ -374,9 +374,32 @@ Return context: {prompt}"
             } else {
                 format!("chain hop {from_id} → {to_id}")
             };
-            let outcome = self
+            let outcome = match self
                 .handoff(session_id, from_id, to_id, prompt, &hop_reason)
-                .await?;
+                .await
+            {
+                Ok(o) => o,
+                Err(e) => {
+                    let msg = e.to_string();
+                    if let Ok(mut session) = self.sessions.load(session_id) {
+                        let _ = self.sessions.record_chain_failure(
+                            &mut session,
+                            i,
+                            from_id,
+                            to_id,
+                            &msg,
+                        );
+                    }
+                    log_nervous_event(
+                        "nervous.handoff_chain_hop",
+                        "failed",
+                        Some(&format!(
+                            "session={session_id} hop={i} {from_id}→{to_id} error={msg}"
+                        )),
+                    );
+                    return Err(e);
+                }
+            };
             if let RouteOutcome::Handoff {
                 from_agent,
                 to_agent,

@@ -228,3 +228,9 @@ code ~/dev/projects/RMNG-OS
 - Upward return to L4 orchestrator (feedback loop) with session tool-result summary
 - `shared_context.orchestration` tracks chain progress; audit events per hop
 - E2E: autonomous chain, return-to-orchestrator, chain state in prompt context
+### Sprint 24 — Live LLM orchestration hardening ✅
+- Stronger chain/return prompt guidance + orchestration_prompt module
+- Robust parse_core_intent (JSON extraction, comma-chain normalize)
+- `rmng ask --auto-continue` partial dispatch loop
+- Chain hop failure recording + audit
+- live_llm_chain_e2e (Groq/Grok); orchestration-usage.md
