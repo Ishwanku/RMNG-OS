@@ -47,9 +47,14 @@ Mock LLM routes MCP git tools when prompt includes `mcp` (e.g. "show mcp git dif
 systemctl --user restart rmngd
 ```
 
+## Sandbox verification (Sprint 17)
+
+After git/issue research and evaluation, use opt-in E2B sandbox for script verification. See [sandbox-usage.md](sandbox-usage.md).
+
 ## Tests
 
 ```bash
+cd agents && cargo test -p rmng-nervous --test sandbox_e2e -- --nocapture
 cd agents && cargo test -p rmng-nervous --test mcp_e2e -- --nocapture
 cd agents && cargo test -p rmng-core permission -- --nocapture
 ```

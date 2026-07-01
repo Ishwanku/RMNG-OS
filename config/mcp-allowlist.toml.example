@@ -95,3 +95,17 @@ pids_max = 64
 cgroup = true
 new_session = true
 no_new_privs = true
+
+# Sprint 17 — sandboxed code execution (opt-in; requires E2B_API_KEY in rmngd env)
+[servers.e2b]
+enabled = false
+command = "npx"
+args = ["-y", "@e2b/mcp-server"]
+allowed_tools = ["run_code"]
+
+[servers.e2b.isolation]
+memory_mb = 512
+pids_max = 64
+cgroup = true
+new_session = true
+no_new_privs = true

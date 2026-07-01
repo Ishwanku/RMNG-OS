@@ -389,6 +389,46 @@ mod tests {
         assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Deny(_)));
     }
 
+
+    fn test_gate_with_e2b_mcp() -> PermissionGate {
+        let mut servers = HashMap::new();
+        servers.insert(
+            "e2b".into(),
+            McpServerConfig {
+                enabled: true,
+                command: "npx".into(),
+                args: vec!["-y".into(), "@e2b/mcp-server".into()],
+                allowed_tools: vec!["run_code".into()],
+                isolation: None,
+            },
+        );
+        PermissionGate::from_registry(&fixture_registry()).with_mcp_allowlist(McpAllowlist { servers })
+    }
+
+    #[test]
+    fn allows_mcp_e2b_run_code() {
+        let gate = test_gate_with_e2b_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "e2b".into(),
+            mcp_tool: "run_code".into(),
+            mcp_args: serde_json::json!({"code": "print(1)"}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
+    }
+
+    #[test]
+    fn denies_mcp_e2b_shell() {
+        let gate = test_gate_with_e2b_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "e2b".into(),
+            mcp_tool: "run_shell".into(),
+            mcp_args: serde_json::json!({"command": "ls"}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Deny(_)));
+    }
+
     #[test]
     fn denies_disallowed_mcp_tool() {
         let gate = test_gate_with_mcp();

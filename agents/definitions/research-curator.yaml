@@ -9,6 +9,7 @@ skills:
   - output-validation
   - improvement-loop
   - phase-gates
+  - code-execution
 allowed_native_tools:
   - github.pr_status
 allowed_mcp_tools:
@@ -19,5 +20,6 @@ allowed_mcp_tools:
   - mem0:search_memories
   - mem0:get_memory
   - mem0:delete_memory
+  - e2b:run_code
 delegates_to: []
-daily_budget_usd: 2.0
+daily_budget_usd: 2.5

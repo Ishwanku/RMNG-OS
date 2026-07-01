@@ -10,6 +10,7 @@ skills:
   - self-critique
   - output-validation
   - improvement-loop
+  - code-execution
 allowed_native_tools:
   - git.status
   - git.diff
@@ -20,5 +21,6 @@ allowed_mcp_tools:
   - git:git.status
   - mem0:search_memories
   - mem0:get_memory
+  - e2b:run_code
 delegates_to: []
-daily_budget_usd: 1.25
+daily_budget_usd: 1.5

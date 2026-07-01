@@ -54,7 +54,7 @@ The GitHub Repos analysis (130+ entries) clusters into:
 | [BerriAI/litellm](https://github.com/litellm/litellm) | 4 | Reference for gateway routing — RMNG has native providers | L | Med |
 | [langfuse/langfuse](https://github.com/langfuse/langfuse) | 4 | External trace UI — complement audit.jsonl | M | Low |
 | [promptfoo/promptfoo](https://github.com/promptfoo/promptfoo) | 3 | Rubric eval patterns in skills | M | Low | **Active** (Sprint 16) |
-| [e2b-dev/E2B](https://github.com/e2b-dev/e2b) | 2 | Sandboxed code exec MCP (future high-risk tools) | L | High |
+| [e2b-dev/E2B](https://github.com/e2b-dev/e2b) | 2 | Sandboxed code exec MCP (`run_code`) | L | High | **Active** (Sprint 17, opt-in) |
 | [ChromeDevTools/chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) | 2 | Deep browser debug — after Playwright stable | M | Med |
 | `kernel.status` native expansion | 1 | Hot-path kernel ops — small Rust handlers | M | Low |
 
@@ -140,3 +140,12 @@ See [integrations/README.md](integrations/README.md) for per-repo intake records
 | improvement-loop skill | 3 | composable with memory/research | ✅ Complete |
 | promptfoo patterns | 3 | intake doc; no full framework | ✅ Complete |
 | Agent evaluation scope | L3 | 4 agents + budget limits | ✅ Complete |
+
+## Sprint 17 Status
+
+| Item | Track | Deliverable | Status |
+|------|-------|-------------|--------|
+| E2B MCP | 2 | run_code + opt-in E2E + isolation | ✅ Complete |
+| code-execution skill | 3 | safety + testing patterns | ✅ Complete |
+| Agent sandbox scope | L3 | repo-keeper, research-curator | ✅ Complete |
+| Usage docs | — | e2b-mcp.md, sandbox-usage.md | ✅ Complete |

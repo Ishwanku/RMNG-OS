@@ -1,0 +1,13 @@
+{
+  "schema_version": "2",
+  "action": "mcp.proxy",
+  "server": "e2b",
+  "tool": "run_code",
+  "params": {
+    "code": "print(sum([1, 2, 3]))"
+  },
+  "metadata": {
+    "agent_id": "repo-keeper",
+    "reason": "sandbox smoke test"
+  }
+}

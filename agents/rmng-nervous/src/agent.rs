@@ -339,6 +339,25 @@ mod tests {
     }
 
     #[test]
+    fn l3_sandbox_agents_include_code_execution_skill() {
+        let reg = fixture_registry();
+        for id in ["repo-keeper", "research-curator"] {
+            let agent = reg.get(id).expect(id);
+            assert!(
+                agent.skills.iter().any(|s| s == "code-execution"),
+                "{id} missing code-execution skill"
+            );
+            let intent = CoreIntent::McpProxy {
+                mcp_server: "e2b".into(),
+                mcp_tool: "run_code".into(),
+                mcp_args: serde_json::json!({"code": "print(1)"}),
+                metadata: None,
+            };
+            assert!(agent.allows_core_intent(&intent).is_ok(), "{id} should allow e2b:run_code");
+        }
+    }
+
+    #[test]
     fn l3_agents_include_evaluation_skills() {
         let reg = fixture_registry();
         let eval_skills = ["self-critique", "output-validation", "improvement-loop"];

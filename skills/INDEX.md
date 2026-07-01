@@ -19,6 +19,7 @@ Intent-shaping guides for the nervous system (BYO-LLM). **Do not execute tools d
 | Output validation | [output-validation/SKILL.md](output-validation/SKILL.md) | Deterministic + threshold gate |
 | Improvement loop | [improvement-loop/SKILL.md](improvement-loop/SKILL.md) | Bounded recall-critique-validate cycle |
 | Memory management | [memory-management/SKILL.md](memory-management/SKILL.md) | Mem0 long-term memory hygiene and privacy |
+| Code execution | [code-execution/SKILL.md](code-execution/SKILL.md) | E2B sandbox run_code — opt-in verification |
 | MCP integration | [mcp-integration/SKILL.md](mcp-integration/SKILL.md) | Track 2 MCP proxy usage and allowlist rules |
 | Spec compliance | [spec-compliance/SKILL.md](spec-compliance/SKILL.md) | agentskills.io + CoreIntent v2 alignment |
 | Research workflow | [research-workflow/SKILL.md](research-workflow/SKILL.md) | Research and documentation curation |

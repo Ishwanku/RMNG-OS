@@ -48,6 +48,46 @@ fn mem0_search_intent(query: &str, metadata: Option<Metadata>) -> CoreIntent {
     }
 }
 
+
+fn e2b_run_code_intent(code: &str, metadata: Option<Metadata>) -> CoreIntent {
+    CoreIntent::McpProxy {
+        mcp_server: "e2b".into(),
+        mcp_tool: "run_code".into(),
+        mcp_args: serde_json::json!({ "code": code }),
+        metadata,
+    }
+}
+
+fn extract_code_from_prompt(prompt: &str) -> String {
+    if let Some(start) = prompt.find("```") {
+        let rest = &prompt[start + 3..];
+        let rest = rest
+            .strip_prefix("python")
+            .or_else(|| rest.strip_prefix("py"))
+            .unwrap_or(rest);
+        if let Some(end) = rest.find("```") {
+            return rest[..end].trim().to_string();
+        }
+    }
+    if let Some(idx) = prompt.find(':') {
+        let tail = prompt[idx + 1..].trim();
+        if !tail.is_empty() && tail.len() < 2000 {
+            return tail.to_string();
+        }
+    }
+    "print(2 + 2)".to_string()
+}
+
+fn wants_sandbox_execution(lower: &str) -> bool {
+    lower.contains("run code")
+        || lower.contains("execute code")
+        || lower.contains("sandbox")
+        || lower.contains("run python")
+        || lower.contains("verify script")
+        || lower.contains("test code")
+}
+
+
 fn mem0_add_intent(text: &str, agent_id: &str, metadata: Option<Metadata>) -> CoreIntent {
     CoreIntent::McpProxy {
         mcp_server: "mem0".into(),
@@ -296,6 +336,9 @@ pub fn mock_core_intent(
             };
         }
         if a.id == "repo-keeper" {
+            if wants_sandbox_execution(&lower) {
+                return e2b_run_code_intent(&extract_code_from_prompt(prompt), metadata);
+            }
             if lower.contains("search memory") || lower.contains("recall memory") {
                 return mem0_search_intent(prompt, metadata);
             }
