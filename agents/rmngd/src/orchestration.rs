@@ -1,5 +1,6 @@
-//! Daemon-side auto-continue using AutoContinueLoop (Sprint 26).
+//! Daemon-side auto-continue using AutoContinueLoop (Sprint 26–27).
 
+use crate::continuation_locks::SessionContinuationLocks;
 use rmng_core::{
     persist_dispatch_to_session, CoreIntent, HandleResponse, OrchestrationContinueResponse,
     RmngConfig, Runtime, SessionStore, ContinuationStatus,
@@ -19,25 +20,6 @@ pub fn max_steps_from_env() -> u32 {
         .and_then(|v| v.parse().ok())
         .filter(|&n| n > 0)
         .unwrap_or(DEFAULT_DAEMON_MAX_STEPS)
-}
-
-fn resolved_max_steps(config: &RmngConfig, session_override: Option<u32>) -> u32 {
-    if let Some(n) = session_override.filter(|&n| n > 0) {
-        return n;
-    }
-    if let Ok(v) = std::env::var("RMNG_AUTO_CONTINUE_MAX_STEPS") {
-        if let Ok(n) = v.parse::<u32>() {
-            if n > 0 {
-                return n;
-            }
-        }
-    }
-    let n = config.auto_continue.max_steps;
-    if n > 0 {
-        n
-    } else {
-        DEFAULT_DAEMON_MAX_STEPS
-    }
 }
 
 fn apply_default_failure_policy(store: &SessionStore, session_id: &str, policy: &str) {
@@ -63,6 +45,7 @@ pub struct DaemonOrchestrator {
     runtime: Runtime,
     router: AgentRouter,
     config: RmngConfig,
+    continuation_locks: SessionContinuationLocks,
 }
 
 impl DaemonOrchestrator {
@@ -71,6 +54,7 @@ impl DaemonOrchestrator {
             runtime,
             router,
             config: RmngConfig::load(),
+            continuation_locks: SessionContinuationLocks::new(),
         }
     }
 
@@ -79,6 +63,7 @@ impl DaemonOrchestrator {
             runtime,
             router,
             config,
+            continuation_locks: SessionContinuationLocks::new(),
         }
     }
 
@@ -90,8 +75,13 @@ impl DaemonOrchestrator {
         &self.router
     }
 
+    /// True when a continuation loop already holds this session's lock.
+    pub async fn is_continuation_busy(&self, session_id: &str) -> bool {
+        self.continuation_locks.is_busy(session_id).await
+    }
+
     /// Whether post-dispatch background continuation should run.
-    pub fn should_trigger_continue(
+    pub async fn should_trigger_continue(
         &self,
         session_id: &str,
         intent: &CoreIntent,
@@ -100,10 +90,17 @@ impl DaemonOrchestrator {
         dispatch_resp.ok
             && intent.is_executable()
             && self.should_auto_continue(session_id, self.router.sessions())
+            && !self.continuation_locks.is_busy(session_id).await
     }
 
     /// Run auto-continue for a session until plan.only, failure, or max steps.
     pub async fn continue_session(&self, session_id: &str) -> OrchestrationContinueResponse {
+        let _lease = self.continuation_locks.acquire_owned(session_id).await;
+        info!(session = session_id, "daemon auto-continue acquired session lock");
+        self.run_continue_with_timeout(session_id).await
+    }
+
+    async fn run_continue_with_timeout(&self, session_id: &str) -> OrchestrationContinueResponse {
         let timeout = self.config.auto_continue.timeout_secs;
         if timeout > 0 {
             match tokio::time::timeout(
@@ -114,15 +111,53 @@ impl DaemonOrchestrator {
             {
                 Ok(resp) => resp,
                 Err(_) => {
-                    warn!(session = session_id, timeout_secs = timeout, "daemon auto-continue timed out");
-                    OrchestrationContinueResponse::failure(
-                        session_id,
-                        format!("auto-continue timed out after {timeout}s"),
-                    )
+                    warn!(
+                        session = session_id,
+                        timeout_secs = timeout,
+                        "daemon auto-continue timed out; finalizing session"
+                    );
+                    self.finalize_interrupted(session_id, "timed_out", ContinuationStatus::Failed);
+                    OrchestrationContinueResponse::timed_out(session_id, timeout)
                 }
             }
         } else {
             self.continue_session_inner(session_id).await
+        }
+    }
+
+    /// Clear stuck `continuation.status = running` after timeout or external interruption.
+    pub fn finalize_interrupted(
+        &self,
+        session_id: &str,
+        orch_status: &str,
+        cont_status: ContinuationStatus,
+    ) {
+        let store = self.router.sessions();
+        match store.load(session_id) {
+            Ok(mut session) => {
+                if let Err(e) = store.finalize_orchestration(&mut session, orch_status, cont_status)
+                {
+                    warn!(
+                        session = session_id,
+                        error = %e,
+                        "failed to finalize interrupted continuation"
+                    );
+                } else {
+                    info!(
+                        session = session_id,
+                        orch_status,
+                        ?cont_status,
+                        "finalized interrupted continuation"
+                    );
+                }
+            }
+            Err(e) => {
+                warn!(
+                    session = session_id,
+                    error = %e,
+                    "could not load session for interruption cleanup"
+                );
+            }
         }
     }
 
@@ -170,7 +205,11 @@ impl DaemonOrchestrator {
                     reason: AutoContinueStopReason::PlanOnly,
                 } => {
                     let _ = cont.finish_session(store, "completed", ContinuationStatus::Done);
-                    info!(session = session_id, steps = steps_run, "daemon auto-continue done (plan.only)");
+                    info!(
+                        session = session_id,
+                        steps = steps_run,
+                        "daemon auto-continue done (plan.only)"
+                    );
                     return OrchestrationContinueResponse::success(
                         session_id,
                         steps_run,
@@ -197,7 +236,8 @@ impl DaemonOrchestrator {
                     let resp = match resp {
                         Ok(r) => r,
                         Err(e) => {
-                            let _ = cont.finish_session(store, "failed", ContinuationStatus::Failed);
+                            let _ =
+                                cont.finish_session(store, "failed", ContinuationStatus::Failed);
                             return OrchestrationContinueResponse::failure(session_id, e.to_string());
                         }
                     };
@@ -236,7 +276,8 @@ impl DaemonOrchestrator {
                         warn!(session = session_id, error = %e, "continuation sync failed");
                     }
                     if cont.at_max_steps() {
-                        let _ = cont.finish_session(store, "completed", ContinuationStatus::Exhausted);
+                        let _ =
+                            cont.finish_session(store, "completed", ContinuationStatus::Exhausted);
                         info!(session = session_id, "daemon auto-continue exhausted max steps");
                         return OrchestrationContinueResponse::success(
                             session_id,
@@ -251,10 +292,16 @@ impl DaemonOrchestrator {
         }
 
         let _ = cont.finish_session(store, "completed", ContinuationStatus::Done);
-        OrchestrationContinueResponse::success(session_id, steps_run, true, "completed", dispatch_actions)
+        OrchestrationContinueResponse::success(
+            session_id,
+            steps_run,
+            true,
+            "completed",
+            dispatch_actions,
+        )
     }
 
-    /// After a successful tool dispatch, run one continuation cycle if session state requires it.
+    /// After a successful tool dispatch, run continuation if session state requires it.
     pub async fn maybe_continue_after_dispatch(
         &self,
         session_id: &str,
@@ -271,8 +318,18 @@ impl DaemonOrchestrator {
         if !self.should_auto_continue(session_id, store) {
             return None;
         }
+        let _lease = match self.continuation_locks.try_acquire_owned(session_id).await {
+            Some(g) => g,
+            None => {
+                warn!(
+                    session = session_id,
+                    "daemon background auto-continue skipped (already in progress)"
+                );
+                return None;
+            }
+        };
         info!(session = session_id, "daemon post-dispatch auto-continue triggered");
-        Some(self.continue_session(session_id).await)
+        Some(self.run_continue_with_timeout(session_id).await)
     }
 
     fn should_auto_continue(&self, session_id: &str, store: &SessionStore) -> bool {
@@ -325,7 +382,7 @@ impl DaemonOrchestrator {
             .and_then(|c| c.get("max_steps"))
             .and_then(|v| v.as_u64())
             .map(|n| n as u32);
-        let max_steps = resolved_max_steps(&self.config, session_max);
+        let max_steps = self.config.auto_continue.resolved_max_steps(session_max);
         apply_default_failure_policy(
             store,
             session_id,
@@ -343,5 +400,70 @@ impl DaemonOrchestrator {
         if let Some(summary) = outcome.chain_outcome_summary() {
             info!("{summary}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmng_core::{LlmConfig, LlmProvider};
+
+    fn mock_config() -> RmngConfig {
+        RmngConfig {
+            llm: LlmConfig {
+                llm_provider: LlmProvider::None,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn finalize_interrupted_clears_running_continuation() {
+        let dir = std::env::temp_dir().join(format!("rmng-fin-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let session = store.create().expect("create");
+        {
+            let mut loaded = store.load(&session.id).expect("load");
+            store
+                .set_orchestration_state(
+                    &mut loaded,
+                    serde_json::json!({
+                        "status": "running",
+                        "awaiting_continuation": true,
+                        "continuation_agent": "swarm-coordinator",
+                        "continuation": {
+                            "enabled": true,
+                            "max_steps": 3,
+                            "step": 1,
+                            "start_agent": "swarm-coordinator",
+                            "active_agent": "swarm-coordinator",
+                            "next_prompt": "go",
+                            "status": "running"
+                        }
+                    }),
+                )
+                .expect("orch");
+        }
+        let orch = DaemonOrchestrator::with_config(
+            Runtime::bootstrap().unwrap_or_default(),
+            AgentRouter::with_session_store(
+                rmng_nervous::AgentRegistry::load().expect("registry"),
+                rmng_nervous::NervousConnector::from_config(mock_config()),
+                store.clone(),
+            ),
+            mock_config(),
+        );
+        orch.finalize_interrupted(&session.id, "timed_out", ContinuationStatus::Failed);
+        let loaded = store.load(&session.id).expect("load");
+        let cont = SessionStore::chain_continuation(&loaded).expect("cont");
+        assert!(!cont.should_run());
+        assert!(!loaded
+            .shared_context
+            .get("orchestration")
+            .and_then(|o| o.get("awaiting_continuation"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

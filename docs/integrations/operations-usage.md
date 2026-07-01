@@ -141,4 +141,4 @@ echo '{"action":"orchestration.continue","session_id":"<sid>"}' | nc -U ~/.rmng/
 rmng ask --session <sid> --agent swarm-coordinator "run git status"
 ```
 
-Tune in `~/.rmng/config.toml` under `[auto_continue]` — see [orchestration-usage.md](./orchestration-usage.md).
+Sprint 27: one continuation loop per session (concurrent triggers are skipped); timeouts finalize session state. Tune in `~/.rmng/config.toml` under `[auto_continue]` — see [orchestration-usage.md](./orchestration-usage.md).

@@ -40,7 +40,7 @@ async fn handle_line(
                 Ok(resp) => {
                     if let (Some(sid), Some(intent)) = (session_id.as_deref(), core_intent.as_ref())
                     {
-                        if orchestrator.should_trigger_continue(sid, intent, &resp) {
+                        if orchestrator.should_trigger_continue(sid, intent, &resp).await {
                             let orch = Arc::clone(orchestrator);
                             let sid = sid.to_string();
                             let intent = intent.clone();

@@ -83,6 +83,19 @@ impl OrchestrationContinueResponse {
             dispatch_actions: Vec::new(),
         }
     }
+
+    pub fn timed_out(session_id: &str, timeout_secs: u64) -> Self {
+        Self {
+            ok: false,
+            action: "orchestration.continue".into(),
+            session_id: session_id.to_string(),
+            steps_run: 0,
+            finished: true,
+            status: "timed_out".into(),
+            error: Some(format!("auto-continue timed out after {timeout_secs}s")),
+            dispatch_actions: Vec::new(),
+        }
+    }
 }
 
 #[cfg(test)]

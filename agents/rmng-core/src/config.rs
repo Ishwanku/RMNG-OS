@@ -86,12 +86,35 @@ pub struct AutoContinueConfig {
     pub default_failure_policy: String,
 }
 
+pub const DEFAULT_AUTO_CONTINUE_MAX_STEPS: u32 = 3;
+
 impl Default for AutoContinueConfig {
     fn default() -> Self {
         Self {
             max_steps: default_auto_continue_max_steps(),
             timeout_secs: default_auto_continue_timeout_secs(),
             default_failure_policy: default_auto_continue_failure_policy(),
+        }
+    }
+}
+
+impl AutoContinueConfig {
+    /// Resolve max steps: session override → `RMNG_AUTO_CONTINUE_MAX_STEPS` → config → default.
+    pub fn resolved_max_steps(&self, session_override: Option<u32>) -> u32 {
+        if let Some(n) = session_override.filter(|&n| n > 0) {
+            return n;
+        }
+        if let Ok(v) = std::env::var("RMNG_AUTO_CONTINUE_MAX_STEPS") {
+            if let Ok(n) = v.parse::<u32>() {
+                if n > 0 {
+                    return n;
+                }
+            }
+        }
+        if self.max_steps > 0 {
+            self.max_steps
+        } else {
+            DEFAULT_AUTO_CONTINUE_MAX_STEPS
         }
     }
 }
@@ -433,6 +456,19 @@ default_failure_policy = "skip"
         assert_eq!(cfg.auto_continue.max_steps, 5);
         assert_eq!(cfg.auto_continue.timeout_secs, 120);
         assert_eq!(cfg.auto_continue.default_failure_policy, "skip");
+    }
+
+    #[test]
+    fn resolved_max_steps_prefers_session_then_env() {
+        let cfg = AutoContinueConfig {
+            max_steps: 7,
+            ..Default::default()
+        };
+        assert_eq!(cfg.resolved_max_steps(Some(5)), 5);
+        std::env::set_var("RMNG_AUTO_CONTINUE_MAX_STEPS", "4");
+        assert_eq!(cfg.resolved_max_steps(None), 4);
+        std::env::remove_var("RMNG_AUTO_CONTINUE_MAX_STEPS");
+        assert_eq!(cfg.resolved_max_steps(None), 7);
     }
 
     struct TestAgent {

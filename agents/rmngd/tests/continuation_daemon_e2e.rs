@@ -98,9 +98,9 @@ async fn should_trigger_continue_skips_failed_dispatch() {
         metadata: None,
     };
     let bad = HandleResponse::failure("tool failed");
-    assert!(!orch.should_trigger_continue(&session.id, &intent, &bad));
+    assert!(!orch.should_trigger_continue(&session.id, &intent, &bad).await);
     let good = HandleResponse::core_success("tool.execute:git.status", None);
-    assert!(orch.should_trigger_continue(&session.id, &intent, &good));
+    assert!(orch.should_trigger_continue(&session.id, &intent, &good).await);
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -138,3 +138,5 @@ async fn continuation_state_survives_reload() {
     assert!(cont.should_run());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+

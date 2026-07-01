@@ -63,8 +63,11 @@ enum Commands {
             help = "Auto-continue: dispatch executable intents and re-ask until plan.only or max steps (requires --session)"
         )]
         auto_continue: bool,
-        #[arg(long, default_value = "3", help = "Max auto-continue steps (with --auto-continue)")]
-        max_steps: u32,
+        #[arg(
+            long,
+            help = "Max auto-continue steps (with --auto-continue); defaults to [auto_continue].max_steps in config"
+        )]
+        max_steps: Option<u32>,
     },
     /// Multi-agent session management
     Session {
@@ -556,12 +559,15 @@ async fn main() {
                 let router = AgentRouter::with_registry(registry, connector);
                 if auto_continue {
                     if let Some(ref sid) = session {
+                        let cfg = RmngConfig::load();
+                        let steps = max_steps
+                            .unwrap_or_else(|| cfg.auto_continue.resolved_max_steps(None));
                         let code = ask_with_auto_continue(
                             &router,
                             sid,
                             &agent_id,
                             &prompt,
-                            max_steps,
+                            steps,
                             dry_run,
                         )
                         .await;

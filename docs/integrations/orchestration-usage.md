@@ -75,6 +75,12 @@ Post-dispatch continuation runs **in the background** so the IPC response stays 
 
 CLI `--auto-continue` uses the same `AutoContinueLoop` in `rmng-nervous`; rmngd logs `daemon background auto-continue finished` with `steps` and `status`.
 
+### Production safety (Sprint 27)
+
+- **Per-session lock** — only one `continue_session` runs per session; background triggers are skipped when a loop is already in progress (`daemon background auto-continue skipped`).
+- **Timeout cleanup** — when `timeout_secs` elapses, rmngd calls `finalize_orchestration` so `continuation.status` is not left as `running` (`status: timed_out`).
+- **CLI defaults** — omit `--max-steps` to use `[auto_continue].max_steps` from config (env `RMNG_AUTO_CONTINUE_MAX_STEPS` still overrides).
+
 ## Chain error recovery (Sprint 25)
 
 Failed and skipped hops are persisted for orchestrator re-planning:

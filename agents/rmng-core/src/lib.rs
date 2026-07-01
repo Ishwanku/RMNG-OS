@@ -43,7 +43,7 @@ pub use budget::{
 };
 pub use config::{
     parse_provider_str, AgentLlmOverride, BudgetEnforceMode, LlmBudgetConfig, LlmConfig,
-    AutoContinueConfig, LlmConfigEntry, LlmProfile, LlmProvider, LlmProviderKind, RmngConfig,
+    AutoContinueConfig, DEFAULT_AUTO_CONTINUE_MAX_STEPS, LlmConfigEntry, LlmProfile, LlmProvider, LlmProviderKind, RmngConfig,
 };
 pub use cost_rollup::{
     rollup_llm_costs, rollup_recent_days, CostRollupReport, EntityCost, PeriodCost, RankedEntityCost,
