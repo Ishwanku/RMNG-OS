@@ -1,5 +1,6 @@
 use super::prompt::build_reasoning_prompt;
-use super::types::{parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, ProviderError};
+use super::backoff::retry_delay;
+use super::types::{parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, LlmUsage, ProviderError};
 use rmng_core::CoreIntent;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -31,6 +32,18 @@ struct GenerationConfig {
 #[derive(Deserialize)]
 struct GenerateResponse {
     candidates: Option<Vec<Candidate>>,
+    #[serde(rename = "usageMetadata", default)]
+    usage_metadata: Option<GoogleUsageMetadata>,
+}
+
+#[derive(Deserialize)]
+struct GoogleUsageMetadata {
+    #[serde(rename = "promptTokenCount", default)]
+    prompt_token_count: Option<u32>,
+    #[serde(rename = "candidatesTokenCount", default)]
+    candidates_token_count: Option<u32>,
+    #[serde(rename = "totalTokenCount", default)]
+    total_token_count: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -135,7 +148,7 @@ impl GoogleProvider {
                 Ok(resp) => return Ok(resp),
                 Err(e) if e.is_retryable() && attempt < self.max_retries => {
                     last_err = Some(e);
-                    tokio::time::sleep(Duration::from_millis(800 * (attempt as u64 + 1))).await;
+                    tokio::time::sleep(retry_delay(attempt)).await;
                 }
                 Err(e) => return Err(e),
             }
@@ -182,10 +195,23 @@ impl GoogleProvider {
             .and_then(|p| p.first())
             .and_then(|p| p.text.clone())
             .ok_or_else(|| ProviderError::Misconfigured("google empty response".into()))?;
+        let usage = parsed
+            .usage_metadata
+            .as_ref()
+            .map(|u| {
+                let mut usage =
+                    LlmUsage::from_counts(u.prompt_token_count, u.candidates_token_count);
+                if let Some(t) = u.total_token_count {
+                    usage.total_tokens = Some(t);
+                }
+                usage
+            })
+            .unwrap_or_default();
         Ok(LlmResponse {
             content,
             provider_id: "google",
             model: self.model.clone(),
+            usage,
         })
     }
 

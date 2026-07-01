@@ -1,10 +1,10 @@
 use rmng_core::LlmProvider;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CatalogMeta {
     pub version: String,
     #[serde(default)]
@@ -13,7 +13,7 @@ pub struct CatalogMeta {
     pub notes: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ModelEntry {
     pub id: String,
     #[serde(default)]
@@ -26,7 +26,7 @@ pub struct ModelEntry {
     pub specialized: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProviderEntry {
     pub label: String,
     pub api_style: String,
@@ -44,7 +44,7 @@ pub struct ProviderEntry {
     pub models: Vec<ModelEntry>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LlmCatalogFile {
     pub catalog: CatalogMeta,
     #[serde(default)]
@@ -172,6 +172,51 @@ pub fn list_all_providers() -> Vec<(String, ProviderEntry)> {
         .collect();
     out.sort_by(|a, b| a.0.cmp(&b.0));
     out
+}
+
+pub fn user_catalog_path() -> PathBuf {
+    if let Ok(home) = std::env::var("HOME") {
+        return PathBuf::from(home).join(".rmng/llm-catalog.toml");
+    }
+    PathBuf::from("/tmp/rmng/llm-catalog.toml")
+}
+
+/// Merge live-only model ids into the user catalog (Sprint 9).
+pub fn apply_live_models(provider_key: &str, live_only: &[String]) -> Result<(PathBuf, Vec<String>), String> {
+    let path = user_catalog_path();
+    if !path.is_file() {
+        return Err(format!(
+            "catalog not found at {} — run `rmng llm setup` first",
+            path.display()
+        ));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut file: LlmCatalogFile = toml::from_str(&raw).map_err(|e| e.to_string())?;
+    let provider = file
+        .providers
+        .get_mut(provider_key)
+        .ok_or_else(|| format!("provider '{provider_key}' not in catalog"))?;
+    let mut added = Vec::new();
+    for id in live_only {
+        if provider.models.iter().any(|m| m.id == *id) {
+            continue;
+        }
+        provider.models.push(ModelEntry {
+            id: id.clone(),
+            tier: Some("discovered".into()),
+            description: Some("Added by rmng llm sync-catalog --apply".into()),
+            default: false,
+            specialized: false,
+        });
+        added.push(id.clone());
+    }
+    if added.is_empty() {
+        return Ok((path, added));
+    }
+    file.catalog.updated = Some(chrono::Utc::now().format("%Y-%m-%d").to_string());
+    let out = toml::to_string_pretty(&file).map_err(|e| e.to_string())?;
+    std::fs::write(&path, out).map_err(|e| e.to_string())?;
+    Ok((path, added))
 }
 
 pub fn install_user_catalog(from: &Path) -> std::io::Result<PathBuf> {

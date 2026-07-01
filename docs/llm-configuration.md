@@ -150,7 +150,23 @@ llm_fallback:
   - local-ollama
 ```
 
-Per-agent `llm_fallback` replaces the global list when non-empty. Invalid API keys do **not** trigger fallback (fix the key instead). Fallback attempts are logged as `nervous.llm_fallback` and shown in `rmng observe`.
+Per-agent `llm_fallback` replaces the global list when non-empty. Invalid API keys do **not** trigger fallback (fix the key instead). Fallback works for `rmng ask` without `--session` as well — telemetry is always written to the audit log; session files get per-call records when a session is active.
+
+Fallback attempts are logged as `nervous.llm_fallback`. Circuit breaker events use `nervous.circuit_breaker` when a provider is temporarily skipped after repeated 429/billing failures.
+
+## Token & cost telemetry (Sprint 9)
+
+Every successful LLM call records:
+
+| Field | Source |
+|-------|--------|
+| `prompt_tokens` / `completion_tokens` | Provider response (`usage` / `usageMetadata`) |
+| `estimated_cost_usd` | Heuristic from model name when provider omits billing |
+| `fallback_index` | 0 = primary profile, 1+ = fallback used |
+
+Telemetry is stored in session `llm_calls` (when `--session` is active) and appended to `~/.rmng/logs/audit.jsonl` as `nervous.llm_call` (always, including session-less `rmng ask`).
+
+`rmng observe` shows per-call tokens/cost and session totals (Σ tokens, estimated cost).
 
 ## Handoff pre-validation (Sprint 8)
 
@@ -184,9 +200,11 @@ rmng llm use <profile>
 rmng llm setup
 rmng llm health
 rmng llm matrix
-rmng llm sync-catalog [--specialized]
+rmng llm sync-catalog [--specialized] [--apply]
 ```
 
-`rmng observe` shows global fallback chain and per-session LLM call latency when metrics are recorded.
+`sync-catalog` defaults to dry-run (diff only). `--apply` merges live-only model ids into `~/.rmng/llm-catalog.toml` (run `rmng llm setup` first).
+
+`rmng observe` shows global fallback chain, per-session LLM calls (tokens, cost, latency), and session aggregates.
 
 See also: [llm-providers.md](./llm-providers.md), [llm-provider-matrix.md](./llm-provider-matrix.md).

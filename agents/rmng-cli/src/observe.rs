@@ -110,14 +110,49 @@ pub async fn print_observe() {
                         s.active_agents.len(),
                         s.llm_calls.len()
                     );
-                    for call in s.llm_calls.iter().rev().take(3) {
-                        let agent = call.agent_id.as_deref().unwrap_or("-");
-                        let tokens = match (call.prompt_tokens, call.completion_tokens) {
-                            (Some(p), Some(c)) => format!("tokens={p}+{c}"),
-                            _ => "tokens=-".into(),
+                    let mut session_tokens: u64 = 0;
+                    let mut session_cost: f64 = 0.0;
+                    let mut has_cost = false;
+                    for call in &s.llm_calls {
+                        if let Some(t) = call.total_tokens {
+                            session_tokens += t as u64;
+                        } else if let (Some(p), Some(c)) = (call.prompt_tokens, call.completion_tokens) {
+                            session_tokens += (p + c) as u64;
+                        }
+                        if let Some(c) = call.estimated_cost_usd {
+                            session_cost += c;
+                            has_cost = true;
+                        }
+                    }
+                    if !s.llm_calls.is_empty() {
+                        let cost_line = if has_cost {
+                            format!(" est_cost=${session_cost:.4}")
+                        } else {
+                            String::new()
                         };
                         println!(
-                            "      {} {} [{}] {} {} {}ms",
+                            "      Σ session tokens={session_tokens}{cost_line} ({} calls)",
+                            s.llm_calls.len()
+                        );
+                    }
+                    for call in s.llm_calls.iter().rev().take(3) {
+                        let agent = call.agent_id.as_deref().unwrap_or("-");
+                        let tokens = match (call.prompt_tokens, call.completion_tokens, call.total_tokens) {
+                            (Some(p), Some(c), _) => format!("tokens={p}+{c}"),
+                            (_, _, Some(t)) => format!("tokens={t}"),
+                            _ => "tokens=-".into(),
+                        };
+                        let cost = call
+                            .estimated_cost_usd
+                            .map(|c| format!(" cost=${c:.6}"))
+                            .unwrap_or_default();
+                        let fb = if call.fallback_index > 0 {
+                            format!(" fallback#{}", call.fallback_index)
+                        } else {
+                            String::new()
+                        };
+                        println!(
+                            "      {} {} [{}] {} {} {}ms{fb}",
                             call.timestamp.format("%H:%M:%S"),
                             agent,
                             call.profile_label,
@@ -125,7 +160,7 @@ pub async fn print_observe() {
                             call.model,
                             call.latency_ms
                         );
-                        println!("        {tokens}");
+                        println!("        {tokens}{cost}");
                     }
                 }
             }

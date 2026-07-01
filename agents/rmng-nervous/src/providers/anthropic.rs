@@ -1,5 +1,6 @@
 use super::prompt::build_reasoning_prompt;
-use super::types::{parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, ProviderError};
+use super::backoff::retry_delay;
+use super::types::{parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, LlmUsage, ProviderError};
 use rmng_core::CoreIntent;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -21,6 +22,16 @@ struct AnthropicMessage<'a> {
 #[derive(Deserialize)]
 struct MessagesResponse {
     content: Vec<ContentBlock>,
+    #[serde(default)]
+    usage: Option<AnthropicUsage>,
+}
+
+#[derive(Deserialize)]
+struct AnthropicUsage {
+    #[serde(default)]
+    input_tokens: Option<u32>,
+    #[serde(default)]
+    output_tokens: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -78,7 +89,7 @@ impl AnthropicProvider {
                 Ok(resp) => return Ok(resp),
                 Err(e) if e.is_retryable() && attempt < self.max_retries => {
                     last_err = Some(e);
-                    tokio::time::sleep(Duration::from_millis(800 * (attempt as u64 + 1))).await;
+                    tokio::time::sleep(retry_delay(attempt)).await;
                 }
                 Err(e) => return Err(e),
             }
@@ -122,10 +133,16 @@ impl AnthropicProvider {
             .first()
             .and_then(|b| b.text.clone())
             .ok_or_else(|| ProviderError::Misconfigured("anthropic empty response".into()))?;
+        let usage = parsed
+            .usage
+            .as_ref()
+            .map(|u| LlmUsage::from_counts(u.input_tokens, u.output_tokens))
+            .unwrap_or_default();
         Ok(LlmResponse {
             content,
             provider_id: "anthropic",
             model: self.model.clone(),
+            usage,
         })
     }
 

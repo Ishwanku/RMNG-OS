@@ -149,6 +149,7 @@ Multi-agent routing, layer model, session store, swarm handoffs.
 | **Sprint 6** | ✅ | Autonomous handoff (`metadata.handoff_to`), JSON auto-retry, provider matrix, production hardening |
 | **Sprint 7** | ✅ | Per-agent LLM (`llm_profile` / `model` in agent YAML), live model discovery (`rmng llm models --live`), multi-hop `handoff_chain`, expanded matrix + error classification, generation params |
 | **Sprint 8** | ✅ | Provider fallback chains (`llm_fallback`), handoff pre-validation, per-session LLM observability in `rmng observe`, `rmng llm sync-catalog`, expanded matrix providers |
+| **Sprint 9** | ✅ | Token/cost telemetry, circuit breaker + exponential backoff, fallback E2E tests, `sync-catalog --apply`, session-less fallback + audit telemetry |
 
 See [ADR-017](decisions/ADR-017-multi-level-agent-architecture.md).
 

@@ -1,7 +1,7 @@
 use rmng_core::{parse_provider_str, LlmProviderKind, RmngConfig};
 use rmng_nervous::{
-    catalog_path, compare_models, default_model, install_user_catalog, list_all_providers,
-    list_catalog_models, load_catalog, resolve_api_key,
+    apply_live_models, catalog_path, compare_models, default_model, install_user_catalog,
+    list_all_providers, list_catalog_models, load_catalog, resolve_api_key, user_catalog_path,
 };
 
 pub fn print_show() {
@@ -208,16 +208,21 @@ fn parse_id(id: &str) -> LlmProviderKind {
     parse_provider_str(id).unwrap_or(LlmProviderKind::None)
 }
 
-/// Compare live provider APIs against local catalog for all wired providers (Sprint 8).
-pub fn run_sync_catalog(include_specialized: bool) -> i32 {
+/// Compare live provider APIs against local catalog; optionally merge new models (Sprint 9).
+pub fn run_sync_catalog(include_specialized: bool, apply: bool) -> i32 {
     let providers = [
         "grok", "openai", "groq", "google", "anthropic", "together", "fireworks", "deepseek",
         "nvidia_nim", "ollama",
     ];
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     let mut warnings = 0u32;
-    println!("Catalog sync — live API vs ~/.rmng/llm-catalog.toml");
+    let mode = if apply { "apply" } else { "dry-run" };
+    println!("Catalog sync ({mode}) — live API vs {}", user_catalog_path().display());
+    if !apply {
+        println!("(use --apply to merge live-only models into the user catalog)");
+    }
     println!();
+    let mut total_added = 0u32;
     for id in providers {
         let prov = match parse_provider_str(id) {
             Ok(p) => p,
@@ -244,16 +249,37 @@ pub fn run_sync_catalog(include_specialized: bool) -> i32 {
                 for m in &report.catalog_only {
                     println!("             WARN catalog-only: {m}");
                 }
-                for m in report.live_only.iter().take(5) {
+                for m in &report.live_only {
                     println!("             WARN live-only: {m}");
+                }
+                if apply && !report.live_only.is_empty() {
+                    match apply_live_models(id, &report.live_only) {
+                        Ok((path, added)) => {
+                            total_added += added.len() as u32;
+                            if !added.is_empty() {
+                                println!("             APPLY added {} model(s) → {}", added.len(), path.display());
+                                for m in &added {
+                                    println!("             + {m}");
+                                }
+                            }
+                        }
+                        Err(e) => println!("             APPLY ERROR: {e}"),
+                    }
                 }
             }
             Err(e) => println!("{id:<12} ERROR: {e}"),
         }
     }
     println!();
-    if warnings > 0 {
-        println!("{warnings} provider(s) with catalog drift — edit ~/.rmng/llm-catalog.toml");
+    if apply {
+        if total_added > 0 {
+            println!("Applied {total_added} new model(s) to {}", user_catalog_path().display());
+        } else {
+            println!("No new models to apply.");
+        }
+        0
+    } else if warnings > 0 {
+        println!("{warnings} provider(s) with catalog drift — run with --apply to merge live-only models");
         1
     } else {
         println!("No drift detected (or no live API access).");

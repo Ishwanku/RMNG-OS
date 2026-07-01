@@ -122,6 +122,8 @@ enum LlmCommands {
     SyncCatalog {
         #[arg(long, help = "Include specialized models in comparison")]
         specialized: bool,
+        #[arg(long, help = "Merge live-only models into ~/.rmng/llm-catalog.toml")]
+        apply: bool,
     },
 }
 
@@ -788,7 +790,9 @@ async fn main() {
             }
             LlmCommands::Use { name } => llm_cmd::run_use(&name),
             LlmCommands::Setup => llm_cmd::run_setup(),
-            LlmCommands::SyncCatalog { specialized } => llm_cmd::run_sync_catalog(specialized),
+            LlmCommands::SyncCatalog { specialized, apply } => {
+                llm_cmd::run_sync_catalog(specialized, apply)
+            }
         }
     };
     if code != 0 {

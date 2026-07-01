@@ -45,6 +45,12 @@ pub struct LlmCallRecord {
     pub prompt_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completion_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimated_cost_usd: Option<f64>,
+    #[serde(default)]
+    pub fallback_index: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

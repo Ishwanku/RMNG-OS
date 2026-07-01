@@ -141,7 +141,9 @@ api_key_env_var = "RMNG_LLM_API_KEY"
 - **Per-agent LLM**: `llm_profile`, `llm_provider`, or `model` in `agents/definitions/*.yaml` — see [llm-configuration.md](./llm-configuration.md).
 - **Live model discovery**: `rmng llm models --live` queries provider APIs and warns on catalog drift.
 - **Error classification**: health/matrix report `InvalidKey`, `Billing`, `ModelNotFound`, `RateLimit`, etc.
-- **Rate limits**: 429 responses retry with exponential backoff.
+- **Rate limits**: 429 responses retry with exponential backoff + jitter; repeated failures trip a per-provider circuit breaker (`nervous.circuit_breaker` in audit log).
+- **Token/cost telemetry** (Sprint 9): usage parsed from provider responses; cost estimated when omitted; logged to audit + session `llm_calls`.
+- **Fallback chains** (Sprint 8–9): `llm_fallback` profiles; works with or without `--session`; audit always records `nervous.llm_call`.
 - **Provider matrix**: `rmng llm matrix` (Grok, OpenAI, Groq, Google, Anthropic, Together, Fireworks, DeepSeek, NVIDIA NIM, Ollama).
 
 See also: [llm-provider-matrix.md](./llm-provider-matrix.md).
@@ -157,6 +159,7 @@ rmng llm use <profile>
 rmng llm setup     # install catalog to ~/.rmng/
 rmng llm health
 rmng llm matrix
+rmng llm sync-catalog [--apply]
 rmng observe
 ```
 

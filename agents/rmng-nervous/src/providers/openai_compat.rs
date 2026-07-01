@@ -1,5 +1,6 @@
 use super::prompt::build_reasoning_prompt;
-use super::types::{parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, ProviderError};
+use super::backoff::retry_delay;
+use super::types::{parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, LlmUsage, ProviderError};
 use rmng_core::CoreIntent;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -32,6 +33,18 @@ struct ResponseFormat {
 #[derive(Deserialize)]
 struct ChatResponse {
     choices: Vec<ChatChoice>,
+    #[serde(default)]
+    usage: Option<OpenAiUsage>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiUsage {
+    #[serde(default)]
+    prompt_tokens: Option<u32>,
+    #[serde(default)]
+    completion_tokens: Option<u32>,
+    #[serde(default)]
+    total_tokens: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -161,7 +174,7 @@ impl OpenAiCompatProvider {
                 Ok(resp) => return Ok(resp),
                 Err(e) if e.is_retryable() && attempt < self.max_retries => {
                     last_err = Some(e);
-                    tokio::time::sleep(Duration::from_millis(800 * (attempt as u64 + 1))).await;
+                    tokio::time::sleep(retry_delay(attempt)).await;
                 }
                 Err(e) => return Err(e),
             }
@@ -216,10 +229,18 @@ impl OpenAiCompatProvider {
                     self.provider_id
                 ))
             })?;
+        let usage = parsed.usage.as_ref().map(|u| {
+            let mut usage = LlmUsage::from_counts(u.prompt_tokens, u.completion_tokens);
+            if let Some(t) = u.total_tokens {
+                usage.total_tokens = Some(t);
+            }
+            usage
+        }).unwrap_or_default();
         Ok(LlmResponse {
             content,
             provider_id: self.provider_id,
             model: self.model.clone(),
+            usage,
         })
     }
 

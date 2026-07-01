@@ -1,7 +1,10 @@
 //! Pluggable LLM provider adapters for the nervous system (Sprint 5).
 
 mod anthropic;
+mod backoff;
 mod catalog;
+mod circuit_breaker;
+mod cost;
 mod defaults;
 mod discovery;
 mod factory;
@@ -15,8 +18,8 @@ mod types;
 
 pub use anthropic::AnthropicProvider;
 pub use catalog::{
-    catalog_path, install_user_catalog, list_all_providers, list_catalog_models, load_catalog,
-    ModelEntry, ProviderEntry,
+    apply_live_models, catalog_path, install_user_catalog, list_all_providers,
+    list_catalog_models, load_catalog, user_catalog_path, ModelEntry, ProviderEntry,
 };
 pub use discovery::{compare_models, fetch_live_models, ModelSyncReport};
 pub use defaults::{
@@ -28,7 +31,8 @@ pub use google::GoogleProvider;
 pub use ollama::OllamaProvider;
 pub use openai_compat::OpenAiCompatProvider;
 pub use prompt::build_reasoning_prompt;
+pub use circuit_breaker::{allow_request, record_failure, record_success};
 pub use types::{
-    parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, ProviderError,
-    ProviderErrorKind,
+    parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, LlmUsage, ProviderError,
+    ProviderErrorKind, ReasonResult,
 };

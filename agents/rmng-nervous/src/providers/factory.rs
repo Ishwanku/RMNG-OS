@@ -4,8 +4,8 @@ use super::google::GoogleProvider;
 use super::ollama::OllamaProvider;
 use super::openai_compat::OpenAiCompatProvider;
 use super::reason::reason_with_retry;
-use super::types::{LlmReasonContext, LlmRequest, LlmResponse, ProviderError};
-use rmng_core::{CoreIntent, LlmConfig, LlmProvider, RmngConfig};
+use super::types::{LlmReasonContext, LlmRequest, LlmResponse, ProviderError, ReasonResult};
+use rmng_core::{LlmConfig, LlmProvider, RmngConfig};
 
 /// Unified LLM backend — dispatches to the correct adapter.
 pub enum LlmBackend {
@@ -141,7 +141,7 @@ impl LlmBackend {
         &self,
         assembled: &str,
         ctx: &LlmReasonContext<'_>,
-    ) -> Result<CoreIntent, ProviderError> {
+    ) -> Result<ReasonResult, ProviderError> {
         reason_with_retry(self, self.id(), assembled, ctx).await
     }
 }

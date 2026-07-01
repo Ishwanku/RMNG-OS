@@ -127,8 +127,8 @@ async fn probe_provider(provider: LlmProvider, label: &str) -> MatrixRow {
     let health_ok = backend.health().await.ok();
     let ctx = LlmReasonContext::default();
     let json_ok = match backend.reason_core(PROBE_PROMPT, &ctx).await {
-        Ok(intent) => {
-            let ok = matches!(intent, rmng_core::CoreIntent::PlanOnly { .. });
+        Ok(result) => {
+            let ok = matches!(result.intent, rmng_core::CoreIntent::PlanOnly { .. });
             (Some(ok), "core-intent parse ok".to_string())
         }
         Err(ref e @ ProviderError::Api { status, ref message, .. }) => (

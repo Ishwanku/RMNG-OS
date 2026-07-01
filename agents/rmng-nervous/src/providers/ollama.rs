@@ -1,5 +1,6 @@
 use super::prompt::build_reasoning_prompt;
-use super::types::{parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, ProviderError};
+use super::backoff::retry_delay;
+use super::types::{parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, LlmUsage, ProviderError};
 use rmng_core::CoreIntent;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -15,6 +16,10 @@ struct GenerateRequest<'a> {
 #[derive(Deserialize)]
 struct GenerateResponse {
     response: String,
+    #[serde(default)]
+    prompt_eval_count: Option<u32>,
+    #[serde(default)]
+    eval_count: Option<u32>,
 }
 
 pub struct OllamaProvider {
@@ -94,7 +99,7 @@ impl OllamaProvider {
                 Ok(resp) => return Ok(resp),
                 Err(e) if e.is_retryable() && attempt < self.max_retries => {
                     last_err = Some(e);
-                    tokio::time::sleep(Duration::from_millis(500 * (attempt as u64 + 1))).await;
+                    tokio::time::sleep(retry_delay(attempt)).await;
                 }
                 Err(e) => return Err(e),
             }
@@ -123,10 +128,12 @@ impl OllamaProvider {
             });
         }
         let parsed: GenerateResponse = resp.json().await?;
+        let usage = LlmUsage::from_counts(parsed.prompt_eval_count, parsed.eval_count);
         Ok(LlmResponse {
             content: parsed.response,
             provider_id: "ollama",
             model: self.model.clone(),
+            usage,
         })
     }
 

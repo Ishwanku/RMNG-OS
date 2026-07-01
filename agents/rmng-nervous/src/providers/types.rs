@@ -1,4 +1,5 @@
 use rmng_core::CoreIntent;
+use serde::{Deserialize, Serialize};
 
 /// Session/agent context passed to every provider adapter.
 #[derive(Debug, Clone, Default)]
@@ -15,12 +16,80 @@ pub struct LlmRequest<'a> {
     pub ctx: LlmReasonContext<'a>,
 }
 
+/// Token usage and optional cost estimate (Sprint 9).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct LlmUsage {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub estimated_cost_usd: Option<f64>,
+    /// `provider` (billing API), `estimate` (catalog/heuristic), or `none`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_source: Option<String>,
+}
+
+impl LlmUsage {
+    pub fn from_counts(prompt: Option<u32>, completion: Option<u32>) -> Self {
+        let total = prompt
+            .zip(completion)
+            .map(|(p, c)| p.saturating_add(c))
+            .or(prompt)
+            .or(completion);
+        Self {
+            prompt_tokens: prompt,
+            completion_tokens: completion,
+            total_tokens: total,
+            ..Default::default()
+        }
+    }
+
+    pub fn merge(&mut self, other: &LlmUsage) {
+        self.prompt_tokens = sum_opt(self.prompt_tokens, other.prompt_tokens);
+        self.completion_tokens = sum_opt(self.completion_tokens, other.completion_tokens);
+        self.total_tokens = sum_opt(self.total_tokens, other.total_tokens);
+        self.estimated_cost_usd = sum_cost(self.estimated_cost_usd, other.estimated_cost_usd);
+        if other.cost_source.is_some() {
+            self.cost_source = other.cost_source.clone();
+        }
+    }
+}
+
+fn sum_opt(a: Option<u32>, b: Option<u32>) -> Option<u32> {
+    match (a, b) {
+        (Some(x), Some(y)) => Some(x.saturating_add(y)),
+        (Some(x), None) => Some(x),
+        (None, Some(y)) => Some(y),
+        (None, None) => None,
+    }
+}
+
+fn sum_cost(a: Option<f64>, b: Option<f64>) -> Option<f64> {
+    match (a, b) {
+        (Some(x), Some(y)) => Some(x + y),
+        (Some(x), None) => Some(x),
+        (None, Some(y)) => Some(y),
+        (None, None) => None,
+    }
+}
+
+/// Result of nervous reasoning — intent plus aggregated usage across retries.
+#[derive(Debug, Clone)]
+pub struct ReasonResult {
+    pub intent: CoreIntent,
+    pub usage: LlmUsage,
+}
+
 /// Standard nervous-system response — raw JSON text from the model.
 #[derive(Debug, Clone)]
 pub struct LlmResponse {
     pub content: String,
     pub provider_id: &'static str,
     pub model: String,
+    pub usage: LlmUsage,
 }
 
 /// Classified failure kind for health/matrix reporting (Sprint 7).
