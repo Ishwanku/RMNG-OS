@@ -6,7 +6,10 @@ use rmng_core::{
     HandleResponse, IncomingIntent, Intent, PermissionGate, PermissionVerdict, RmngConfig, Runtime,
     SessionStore, socket_path, IntentValidator, IntegrationRegistry,
 };
-use rmng_nervous::{load_skill, load_skill_index, AgentRouter, NervousConnector, RouteOutcome};
+use rmng_nervous::{
+    health_check, list_supported_providers, load_skill, load_skill_index, AgentRouter,
+    NervousConnector, RouteOutcome,
+};
 
 #[derive(Parser)]
 #[command(name = "rmng", about = "RMNG-OS CLI", version)]
@@ -75,6 +78,19 @@ enum Commands {
     Status,
     /// Runtime observability — integrations, agents, audit tail, MCP allowlist
     Observe,
+    /// LLM provider management
+    Llm {
+        #[command(subcommand)]
+        action: LlmCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum LlmCommands {
+    /// Check health of the configured LLM provider
+    Health,
+    /// List all supported LLM providers
+    List,
 }
 
 #[derive(Subcommand)]
@@ -603,7 +619,7 @@ async fn main() {
         Commands::Status => {
             let cfg = RmngConfig::load();
             let connector = NervousConnector::from_config(cfg);
-            println!("rmng 0.1.0 — Sprint 4c (live LLM orchestration + MCP E2E)");
+            println!("rmng 0.1.0 — Sprint 5 (pluggable LLM providers)");
             if let Ok(reg) = IntegrationRegistry::load() {
                 println!(
                     "integrations: {} manifests, {} tools",
@@ -632,8 +648,36 @@ async fn main() {
             0
         }
         Commands::Observe => {
-            observe::print_observe();
+            observe::print_observe().await;
             0
+        }
+        Commands::Llm { action } => match action {
+            LlmCommands::Health => {
+                let connector = NervousConnector::load();
+                match health_check(connector.config()).await {
+                    Ok((id, ok, detail)) => {
+                        let status = if ok { "healthy" } else { "unreachable" };
+                        println!("provider: {id}");
+                        println!("status:   {status}");
+                        if let Some(d) = detail {
+                            println!("detail:   {d}");
+                        }
+                        if ok { 0 } else { 1 }
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                        1
+                    }
+                }
+            }
+            LlmCommands::List => {
+                println!("Supported LLM providers:");
+                for (id, desc, wired) in list_supported_providers() {
+                    let tag = if wired { "wired" } else { "planned" };
+                    println!("  {id:<12} [{tag}] {desc}");
+                }
+                0
+            }
         }
     };
     if code != 0 {

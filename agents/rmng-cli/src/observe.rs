@@ -8,13 +8,27 @@ fn audit_track_label(t: AuditTrack) -> String {
     }
 }
 use rmng_core::SessionStore;
-use rmng_nervous::{load_skill_index, AgentRegistry};
+use rmng_nervous::{health_check, load_skill_index, AgentRegistry, NervousConnector};
 use std::io::{BufRead, BufReader};
 
 const AUDIT_TAIL: usize = 8;
 
-pub fn print_observe() {
+pub async fn print_observe() {
     println!("=== RMNG observe ===");
+    println!();
+
+    let connector = NervousConnector::load();
+    let cfg = connector.config();
+    println!(
+        "llm:          {} ({})",
+        connector.provider_label(),
+        rmng_core::RmngConfig::config_path().display()
+    );
+    if let Ok((id, ok, detail)) = health_check(cfg).await {
+        let status = if ok { "healthy" } else { "unreachable" };
+        let extra = detail.map(|d| format!(" — {d}")).unwrap_or_default();
+        println!("llm health:   {id} [{status}]{extra}");
+    }
     println!();
 
     let daemon_up = rmng_core::daemon_running();

@@ -24,7 +24,7 @@ pub use session::{
     DEFAULT_SESSION_TTL_DAYS, MAX_TOOL_OUTPUT_LEN,
 };
 pub use validator::IntentValidator;
-pub use config::{LlmConfig, LlmProvider, RmngConfig};
+pub use config::{LlmConfig, LlmProvider, LlmProviderKind, RmngConfig};
 pub use dispatch::Runtime;
 pub use error::RmngError;
 pub use intent::{

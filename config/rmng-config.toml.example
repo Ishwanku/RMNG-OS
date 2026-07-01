@@ -2,10 +2,44 @@
 # Install: cp config/rmng-config.toml.example ~/.rmng/config.toml
 
 [llm]
-# Options: none | ollama | openai | anthropic | custom
+# Provider: none | ollama | openai | grok | anthropic | google | groq | together | fireworks | deepseek | nvidia_nim | custom
 llm_provider = "none"
 
-# Provider-specific (uncomment when wiring a live engine):
-# endpoint_url = "http://127.0.0.1:11434"
-# api_key_env_var = "OPENAI_API_KEY"
+# Model (provider-specific default if omitted)
 # model = "llama3.2"
+
+# API key via environment variable (recommended)
+# api_key_env_var = "OPENAI_API_KEY"
+
+# Inline API key (discouraged — use env vars in production)
+# api_key = ""
+
+# Override default endpoint (required for custom / self-hosted)
+# endpoint_url = "http://127.0.0.1:11434"
+
+# Retry and timeout for API providers
+# max_retries = 2
+# timeout_secs = 120
+
+# --- Examples (uncomment one block) ---
+
+# [llm]
+# llm_provider = "ollama"
+# endpoint_url = "http://127.0.0.1:11434"
+# model = "llama3.2"
+
+# [llm]
+# llm_provider = "grok"
+# model = "grok-2-latest"
+# api_key_env_var = "XAI_API_KEY"
+
+# [llm]
+# llm_provider = "openai"
+# model = "gpt-4o"
+# api_key_env_var = "OPENAI_API_KEY"
+
+# [llm]
+# llm_provider = "custom"
+# endpoint_url = "http://localhost:8000/v1"
+# model = "my-model"
+# api_key_env_var = "RMNG_LLM_API_KEY"

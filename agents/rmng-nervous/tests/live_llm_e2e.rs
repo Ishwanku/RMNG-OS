@@ -1,7 +1,7 @@
 //! Live LLM orchestration tests — skip when Ollama is unavailable.
 
 use rmng_core::{LlmConfig, LlmProvider, RmngConfig, SessionStore, ToolResultRecord};
-use rmng_nervous::{AgentRouter, NervousConnector, OllamaAdapter, RouteOutcome};
+use rmng_nervous::{AgentRouter, NervousConnector, OllamaProvider, RouteOutcome};
 use std::path::PathBuf;
 
 fn ollama_config() -> RmngConfig {
@@ -13,12 +13,13 @@ fn ollama_config() -> RmngConfig {
             model: Some(
                 std::env::var("RMNG_OLLAMA_MODEL").unwrap_or_else(|_| "llama3.2".into()),
             ),
+            ..Default::default()
         },
     }
 }
 
 async fn ollama_available() -> bool {
-    OllamaAdapter::default().health().await.unwrap_or(false)
+    OllamaProvider::default().health().await.unwrap_or(false)
 }
 
 fn test_router_with_ollama(store: SessionStore) -> AgentRouter {
