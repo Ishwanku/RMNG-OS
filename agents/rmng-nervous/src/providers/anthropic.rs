@@ -62,7 +62,12 @@ impl AnthropicProvider {
     }
 
     pub async fn health(&self) -> Result<bool, ProviderError> {
-        Ok(!self.api_key.is_empty())
+        if self.api_key.is_empty() {
+            return Ok(false);
+        }
+        // Key-presence check only — avoids token spend on every `rmng llm health`.
+        // Use `scripts/probe-anthropic-minimal.py` for a ~20-token live probe.
+        Ok(true)
     }
 
     pub async fn complete(&self, req: LlmRequest<'_>) -> Result<LlmResponse, ProviderError> {
@@ -87,7 +92,7 @@ impl AnthropicProvider {
         let url = format!("{}/v1/messages", self.base_url.trim_end_matches('/'));
         let body = MessagesRequest {
             model: &self.model,
-            max_tokens: 4096,
+            max_tokens: 1024, // intent JSON only — keep API spend low
             system: "You output only valid JSON for RMNG core-intent v2. No markdown.",
             messages: vec![AnthropicMessage {
                 role: "user",

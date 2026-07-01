@@ -203,6 +203,10 @@ pub async fn health_check_detailed(cfg: &RmngConfig) -> Result<HealthReport, Pro
     match backend {
         Some(b) => {
             let (healthy, detail) = match b.health().await {
+                Ok(true) if b.id() == "anthropic" => (
+                    true,
+                    "API key set (live probe skipped to save tokens — run scripts/probe-anthropic-minimal.py)".into(),
+                ),
                 Ok(true) => (true, "endpoint reachable".into()),
                 Ok(false) => (false, "health probe returned false".into()),
                 Err(ProviderError::Api { status, message, .. }) => {
