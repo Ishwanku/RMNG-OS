@@ -159,6 +159,7 @@ Multi-agent routing, layer model, session store, swarm handoffs.
 | **Sprint 16** | ✅ | Evaluation & self-improvement — critique/validation/loop skills, promptfoo patterns |
 | **Sprint 17** | ✅ | Safe code execution — E2B sandbox MCP, code-execution skill, agent scopes |
 | **Sprint 18** | ✅ | Testing workflows — run-tests, validate-output, coverage, regression skills |
+| **Sprint 19** | ✅ | Production hardening — persistent circuits, observability, audit CI, profile budgets |
 
 See [ADR-017](decisions/ADR-017-multi-level-agent-architecture.md) · [ADR-020](decisions/ADR-020-linux-aligned-runtime-hardening.md) · [ADR-021](decisions/ADR-021-cost-governance.md) · [INTEGRATION-ROADMAP.md](INTEGRATION-ROADMAP.md).
 

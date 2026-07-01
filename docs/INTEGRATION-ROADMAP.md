@@ -160,3 +160,13 @@ See [integrations/README.md](integrations/README.md) for per-repo intake records
 | regression-check skill | 3 | Session/Mem0 baseline compare | ✅ Complete |
 | Agent testing scope | L3 | repo-keeper, research-curator | ✅ Complete |
 | Usage docs | — | testing-usage.md | ✅ Complete |
+
+## Sprint 19 Status
+
+| Item | Track | Deliverable | Status |
+|------|-------|-------------|--------|
+| Persistent circuit breaker | Core | atomic save + cross-process reload | ✅ Complete |
+| Per-agent observability | CLI | observe --cost/json breakdowns | ✅ Complete |
+| Audit verify stats | CLI | CI-friendly --stats/--json | ✅ Complete |
+| Per-profile budgets | Core | profile-scoped spend + governance report | ✅ Complete |
+| Operations docs | — | operations-usage.md | ✅ Complete |

@@ -10,8 +10,8 @@ use rmng_core::{
     IntegrationRegistry,
 };
 use rmng_nervous::{
-    circuit_state_path, health_check_detailed, list_circuit_statuses, list_supported_providers,
-    load_skill, load_skill_index, reload_from_disk, run_provider_matrix, AgentRouter,
+    list_supported_providers,
+    load_skill, load_skill_index, run_provider_matrix, AgentRouter,
     NervousConnector, RouteOutcome,
 };
 
@@ -108,7 +108,10 @@ enum Commands {
 #[derive(Subcommand)]
 enum LlmCommands {
     /// Check health of the configured LLM provider
-    Health,
+    Health {
+        #[arg(long, help = "JSON output for monitoring")]
+        json: bool,
+    },
     /// Run provider validation matrix (uses env API keys)
     Matrix,
     /// List all supported LLM providers (legacy wired list)
@@ -746,45 +749,7 @@ async fn main() {
             AuditCommands::Verify { json, stats } => audit_cmd::run_verify(json, stats),
         },
         Commands::Llm { action } => match action {
-            LlmCommands::Health => {
-                reload_from_disk();
-                let connector = NervousConnector::load();
-                match health_check_detailed(connector.config()).await {
-                    Ok(r) => {
-                        let status = if r.healthy { "healthy" } else { "unreachable" };
-                        println!("provider:  {}", r.provider_id);
-                        println!("status:    {status}");
-                        println!("model:     {}", r.model);
-                        println!("key_set:   {}", r.api_key_set);
-                        if let Some(ep) = &r.endpoint {
-                            println!("endpoint:  {ep}");
-                        }
-                        println!("detail:    {}", r.detail);
-                        let circuits = list_circuit_statuses();
-                        if circuits.is_empty() {
-                            println!("circuits:  none ({})", circuit_state_path().display());
-                        } else {
-                            println!("circuits:  {} tracked ({})", circuits.len(), circuit_state_path().display());
-                            for c in circuits.iter().filter(|c| c.open) {
-                                println!(
-                                    "  OPEN {} failures={} cooldown={:?}s",
-                                    c.provider_id,
-                                    c.failures,
-                                    c.cooldown_secs_remaining
-                                );
-                            }
-                        }
-                        if let Some(b) = rmng_core::check_budget_from_audit(connector.config()) {
-                            println!("budget:    {}", b.message);
-                        }
-                        if r.healthy { 0 } else { 1 }
-                    }
-                    Err(e) => {
-                        eprintln!("{e}");
-                        1
-                    }
-                }
-            }
+            LlmCommands::Health { json } => llm_cmd::run_health(json).await,
             LlmCommands::Matrix => {
                 println!("Provider matrix (env keys only — never commit keys to config):");
                 println!();

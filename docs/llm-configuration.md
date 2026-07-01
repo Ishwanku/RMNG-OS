@@ -193,6 +193,7 @@ Cost estimation uses catalog rates first, then built-in heuristics (`cost_source
 rmng observe --cost              # session/agent/daily/weekly rollups
 rmng observe --cost --json       # export for dashboards/scripts
 rmng llm health                  # includes budget + circuit breaker state
+rmng llm health --json           # JSON for monitoring
 rmng audit verify                # integrity check (exit 1 if tampered)
 rmng audit verify --stats        # + LLM cost summary
 rmng audit verify --json         # CI/cron friendly

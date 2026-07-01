@@ -15,6 +15,7 @@ Per-repository evaluation records for open-source AI/agent/MCP projects consider
 | [e2b-mcp.md](e2b-mcp.md) | `@e2b/mcp-server` | 2 — MCP Proxy | **Active** (Sprint 17, opt-in) |
 | [sandbox-usage.md](sandbox-usage.md) | — | Guide | **Active** (Sprint 17) |
 | [testing-usage.md](testing-usage.md) | — | Guide | **Active** (Sprint 18) |
+| [operations-usage.md](operations-usage.md) | — | Guide | **Active** (Sprint 19) |
 | [evaluation-usage.md](evaluation-usage.md) | — | Guide | **Active** (Sprint 16) |
 | [promptfoo-patterns.md](promptfoo-patterns.md) | promptfoo | 3 — Skill | **Active** |
 | [memory-usage.md](memory-usage.md) | — | Guide | **Active** |

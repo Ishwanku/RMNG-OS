@@ -315,3 +315,114 @@ pub fn run_sync_catalog(include_specialized: bool, apply: bool) -> i32 {
         0
     }
 }
+
+pub async fn run_health(json: bool) -> i32 {
+    use rmng_core::{budget_governance_report, check_budget_from_audit, AuditLog};
+    use rmng_nervous::{
+        circuit_state_path, health_check_detailed, list_circuit_statuses, reload_from_disk,
+        NervousConnector,
+    };
+    use serde::Serialize;
+
+    #[derive(Serialize)]
+    struct HealthJson {
+        provider_id: String,
+        healthy: bool,
+        model: String,
+        api_key_set: bool,
+        endpoint: Option<String>,
+        detail: String,
+        circuit_state_path: String,
+        circuit_breakers: Vec<rmng_nervous::CircuitStatus>,
+        budget: Option<rmng_core::BudgetCheckResult>,
+        budgets: rmng_core::BudgetGovernanceReport,
+    }
+
+    reload_from_disk();
+    let connector = NervousConnector::load();
+    let cfg = connector.config().clone();
+    match health_check_detailed(connector.config()).await {
+        Ok(r) => {
+            let circuits = list_circuit_statuses();
+            let entries = AuditLog::new(AuditLog::default_path())
+                .read_all()
+                .unwrap_or_default();
+            let agent_caps: Vec<(String, Option<f64>)> = rmng_nervous::AgentRegistry::load()
+                .map(|reg| {
+                    reg.agent_ids()
+                        .into_iter()
+                        .filter_map(|id| {
+                            reg.get(&id)
+                                .ok()
+                                .map(|a| (a.id.clone(), a.daily_budget_usd))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let budgets = budget_governance_report(&cfg, &entries, &agent_caps);
+            let budget = check_budget_from_audit(&cfg);
+            if json {
+                let out = HealthJson {
+                    provider_id: r.provider_id,
+                    healthy: r.healthy,
+                    model: r.model,
+                    api_key_set: r.api_key_set,
+                    endpoint: r.endpoint,
+                    detail: r.detail,
+                    circuit_state_path: circuit_state_path().display().to_string(),
+                    circuit_breakers: circuits,
+                    budget,
+                    budgets,
+                };
+                println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+            } else {
+                let status = if r.healthy { "healthy" } else { "unreachable" };
+                println!("provider:  {}", r.provider_id);
+                println!("status:    {status}");
+                println!("model:     {}", r.model);
+                println!("key_set:   {}", r.api_key_set);
+                if let Some(ep) = &r.endpoint {
+                    println!("endpoint:  {ep}");
+                }
+                println!("detail:    {}", r.detail);
+                if circuits.is_empty() {
+                    println!("circuits:  none ({})", circuit_state_path().display());
+                } else {
+                    println!(
+                        "circuits:  {} tracked ({})",
+                        circuits.len(),
+                        circuit_state_path().display()
+                    );
+                    for c in circuits.iter().filter(|c| c.open) {
+                        println!(
+                            "  OPEN {} failures={} cooldown={:?}s",
+                            c.provider_id, c.failures, c.cooldown_secs_remaining
+                        );
+                    }
+                }
+                if let Some(b) = budget {
+                    println!("budget:    {}", b.message);
+                }
+                if let Some(p) = budgets.active_profile {
+                    println!("profile:   {} — {}", p.id, p.check.message);
+                }
+            }
+            if r.healthy { 0 } else { 1 }
+        }
+        Err(e) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "healthy": false,
+                        "error": e.to_string(),
+                    }))
+                    .unwrap_or_default()
+                );
+            } else {
+                eprintln!("{e}");
+            }
+            1
+        }
+    }
+}

@@ -19,8 +19,8 @@ pub mod validator;
 
 pub use allowlist::{McpAllowlist, McpServerConfig};
 pub use audit::{
-    AuditCategory, AuditEntry, AuditLog, AuditTrack, ChainVerifyResult, AUDIT_GENESIS_HASH,
-    AUDIT_SCHEMA_VERSION,
+    compute_audit_stats, AuditCategory, AuditEntry, AuditLog, AuditStats, AuditTrack,
+    ChainVerifyResult, AUDIT_GENESIS_HASH, AUDIT_SCHEMA_VERSION,
 };
 pub use rmng_mcp::{IsolationLimits, IsolationReport, McpCallResult};
 pub use registry::{IntegrationManifest, IntegrationRegistry, ToolManifest};
@@ -31,8 +31,8 @@ pub use session::{
 };
 pub use validator::IntentValidator;
 pub use budget::{
-    check_budget, check_budget_for_agent, check_budget_from_audit, check_budget_from_audit_for_agent,
-    spent_today_for_agent, spent_today_usd, BudgetCheckResult, BudgetLevel,
+    budget_governance_report, check_budget, check_budget_for_agent, check_budget_from_audit, check_budget_from_audit_for_agent,
+    spent_today_for_agent, spent_today_for_profile, spent_today_usd, BudgetCheckResult, BudgetGovernanceReport, BudgetLevel, ScopedBudgetStatus,
 };
 pub use config::{
     parse_provider_str, AgentLlmOverride, BudgetEnforceMode, LlmBudgetConfig, LlmConfig,

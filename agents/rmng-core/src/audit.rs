@@ -70,6 +70,8 @@ pub struct AuditEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub llm_profile: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub skill_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub track: Option<AuditTrack>,
@@ -111,6 +113,7 @@ impl AuditEntry {
             trace_id: None,
             session_id: None,
             agent_id: None,
+            llm_profile: None,
             skill_name: None,
             track: None,
             duration_ms: None,
@@ -166,6 +169,54 @@ fn chain_state_path(audit_path: &Path) -> PathBuf {
 #[derive(Clone)]
 pub struct AuditLog {
     path: PathBuf,
+}
+
+/// Aggregate stats for `rmng audit verify --stats` and CI reporting.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AuditStats {
+    pub total_entries: u64,
+    pub by_category: std::collections::HashMap<String, u64>,
+    pub llm_calls: u64,
+    pub mcp_calls: u64,
+    pub circuit_events: u64,
+    pub handoff_events: u64,
+    pub spent_today_usd: f64,
+    pub spent_total_usd: f64,
+}
+
+pub fn compute_audit_stats(entries: &[AuditEntry]) -> AuditStats {
+    use chrono::Utc;
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+    let mut stats = AuditStats {
+        total_entries: entries.len() as u64,
+        ..Default::default()
+    };
+    for e in entries {
+        let cat = e
+            .category
+            .map(|c| c.as_str().to_string())
+            .unwrap_or_else(|| "unknown".into());
+        *stats.by_category.entry(cat).or_default() += 1;
+        if e.category == Some(AuditCategory::Llm) {
+            stats.llm_calls += 1;
+            if let Some(c) = e.cost_usd {
+                stats.spent_total_usd += c;
+                if e.timestamp.format("%Y-%m-%d").to_string() == today {
+                    stats.spent_today_usd += c;
+                }
+            }
+        }
+        if e.category == Some(AuditCategory::Mcp) {
+            stats.mcp_calls += 1;
+        }
+        if e.category == Some(AuditCategory::Circuit) {
+            stats.circuit_events += 1;
+        }
+        if e.category == Some(AuditCategory::Handoff) {
+            stats.handoff_events += 1;
+        }
+    }
+    stats
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

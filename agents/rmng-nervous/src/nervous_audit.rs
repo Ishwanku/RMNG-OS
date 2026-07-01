@@ -37,6 +37,7 @@ pub fn log_llm_telemetry(
     entry.trace_id = session_id.map(str::to_string);
     entry.session_id = session_id.map(str::to_string);
     entry.agent_id = agent_id.map(str::to_string);
+    entry.llm_profile = Some(profile_label.to_string());
     entry.duration_ms = Some(latency_ms);
     entry.tokens_prompt = prompt_tokens;
     entry.tokens_completion = completion_tokens;
