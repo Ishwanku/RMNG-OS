@@ -56,10 +56,29 @@ rmng session new
 ## Session + handoff (Sprint 4)
 
 ```bash
-SID=$(rmng session new | awk '{print $2}')
+SID=$(rmng session new | grep '^session:' | awk '{print $2}')
 rmng session set-context "$SID" repo '"'"'RMNG-OS'"'"'
 rmng ask --agent swarm-coordinator "check git status" --session "$SID" --dry-run
-rmng handoff --session "$SID" --from swarm-coordinator --to repo-keeper   --reason "explicit" "check git status" --dry-run
+rmng handoff --session "$SID" --from swarm-coordinator --to repo-keeper --reason "explicit" "check git status" --dry-run
 ```
 
-Shared context and recent handoffs are injected into nervous-system prompts when `--session` is set.
+### Shared context flow (Sprint 4b — bidirectional)
+
+| Direction | When | What |
+|-----------|------|------|
+| **In** | `rmng ask` / `rmng handoff` with `--session` | `shared_context`, handoff history, active agents → nervous prompt |
+| **Out** | After successful `rmngd` dispatch with session metadata | Tool name, parameters, output, timestamp, success → `shared_context.tool_results[]` |
+
+```bash
+# Multi-hop chain (L4 → L3 → L2); each hop recorded in handoff_history
+rmng handoff --session "$SID" \
+  --chain swarm-coordinator,repo-keeper,runtime-executor \
+  --reason "delegate execution" "check git status"
+
+# Session hygiene
+rmng session list --verbose    # active vs stale (7-day window)
+rmng session prune --older-than-days 30 --dry-run
+rmng session prune --older-than-days 30
+```
+
+When `--session` is set, tool results from `rmngd` are automatically appended to the session JSON so the next agent hop can reason over prior execution output.

@@ -1,6 +1,9 @@
-//! Integration-style tests for L4→L3 handoff and session context.
+//! Integration-style tests for L4→L3 handoff, session context, and write-back loop.
 
-use rmng_core::{daemon_running, send_intent_json, AuditLog, SessionStore};
+use rmng_core::{
+    build_tool_result_record, daemon_running, persist_dispatch_to_session, send_intent_json,
+    AuditLog, CoreIntent, HandleResponse, SessionStore, ToolResult,
+};
 use rmng_nervous::{AgentRouter, RouteOutcome};
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
@@ -68,6 +71,116 @@ async fn explicit_handoff_cli_path_via_router() {
 }
 
 #[tokio::test]
+async fn tool_result_written_to_shared_context_after_dispatch() {
+    let dir = std::env::temp_dir().join(format!("rmng-writeback-{}", uuid::Uuid::new_v4()));
+    let store = SessionStore::new(&dir);
+    let session = store.create().expect("create");
+    let router = test_router(store.clone());
+
+    let outcome = router
+        .handoff(
+            &session.id,
+            "swarm-coordinator",
+            "repo-keeper",
+            "check git status",
+            "write-back test",
+        )
+        .await
+        .expect("handoff");
+
+    let mut intent = outcome.intent();
+    AgentRouter::enrich_intent_metadata(&mut intent, Some(&session.id), Some("swarm-coordinator"));
+
+    let resp = HandleResponse::core_success(
+        "tool.execute:git.status",
+        Some(ToolResult {
+            success: true,
+            output: "On branch main".into(),
+            exit_code: Some(0),
+        }),
+    );
+    persist_dispatch_to_session(&store, &session.id, &intent, &resp).expect("persist");
+
+    let loaded = store.load(&session.id).expect("load");
+    let ctx = loaded.prompt_context();
+    assert!(ctx.contains("On branch main"));
+    assert!(ctx.contains("git.status"));
+
+    let results = loaded
+        .shared_context
+        .get("tool_results")
+        .and_then(|v| v.as_array())
+        .expect("tool_results");
+    assert_eq!(results.len(), 1);
+    assert!(results[0]["success"].as_bool().unwrap());
+
+    // Next agent step sees prior tool output in prompt assembly.
+    let next = router
+        .ask_routed(Some(&session.id), "repo-keeper", "summarize last git status")
+        .await
+        .expect("follow-up ask");
+    assert!(matches!(next, RouteOutcome::Direct { .. }));
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn multi_hop_handoff_chain_records_full_history() {
+    let dir = std::env::temp_dir().join(format!("rmng-chain-{}", uuid::Uuid::new_v4()));
+    let store = SessionStore::new(&dir);
+    let session = store.create().expect("create");
+    let router = test_router(store);
+
+    let chain = vec![
+        "swarm-coordinator".into(),
+        "repo-keeper".into(),
+        "runtime-executor".into(),
+    ];
+    let outcome = router
+        .handoff_chain(
+            &session.id,
+            &chain,
+            "check git status",
+            "L4→L3→L2 chain",
+        )
+        .await
+        .expect("chain");
+
+    if let RouteOutcome::Handoff { to_agent, .. } = &outcome {
+        assert_eq!(to_agent, "runtime-executor");
+    } else {
+        panic!("expected final handoff outcome");
+    }
+
+    let loaded = router.sessions().load(&session.id).expect("load");
+    assert_eq!(loaded.handoff_history.len(), 2);
+    assert_eq!(loaded.handoff_history[0].to_agent, "repo-keeper");
+    assert_eq!(loaded.handoff_history[1].to_agent, "runtime-executor");
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn build_tool_result_record_captures_mcp_and_metadata() {
+    let intent = CoreIntent::McpProxy {
+        mcp_server: "github".into(),
+        mcp_tool: "search_issues".into(),
+        mcp_args: serde_json::json!({"q": "rmng"}),
+        metadata: Some(rmng_core::Metadata {
+            trace_id: None,
+            skill_name: None,
+            session_id: Some("sid".into()),
+            handoff_from: Some("research-curator".into()),
+        }),
+    };
+    let resp = HandleResponse::failure("mcp unavailable");
+    let record = build_tool_result_record(&intent, &resp).expect("record");
+    assert_eq!(record.tool, "github.search_issues");
+    assert!(!record.success);
+    assert_eq!(record.handoff_from.as_deref(), Some("research-curator"));
+}
+
+#[tokio::test]
 async fn l4_handoff_dispatches_via_rmngd_when_running() {
     if !daemon_running() {
         eprintln!("skip: rmngd not running");
@@ -89,8 +202,21 @@ async fn l4_handoff_dispatches_via_rmngd_when_running() {
     AgentRouter::enrich_intent_metadata(&mut intent, Some(&session.id), handoff_from);
 
     let json = serde_json::to_string(&intent).expect("serialize");
-    let resp = send_intent_json(&json).await.expect("send");
-    assert!(!resp.is_empty());
+    let line = send_intent_json(&json).await.expect("send");
+    assert!(!line.is_empty());
+
+    let handle: HandleResponse = serde_json::from_str(line.trim()).expect("parse response");
+    persist_dispatch_to_session(&store, &session.id, &intent, &handle).expect("write-back");
+
+    let loaded = store.load(&session.id).expect("load session");
+    let results = loaded
+        .shared_context
+        .get("tool_results")
+        .and_then(|v| v.as_array());
+    assert!(
+        results.is_some_and(|r| !r.is_empty()),
+        "tool_results should be written after rmngd dispatch"
+    );
 
     let audit_path = AuditLog::default_path();
     let deadline = Instant::now();

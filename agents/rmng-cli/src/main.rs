@@ -2,9 +2,9 @@ mod observe;
 
 use clap::{Parser, Subcommand};
 use rmng_core::{
-    daemon_running, parse_incoming, send_intent_json, CoreIntent, HandleResponse, IncomingIntent,
-    Intent, PermissionGate, PermissionVerdict, RmngConfig, Runtime, SessionStore, socket_path,
-    IntentValidator, IntegrationRegistry,
+    daemon_running, parse_incoming, persist_dispatch_to_session, send_intent_json, CoreIntent,
+    HandleResponse, IncomingIntent, Intent, PermissionGate, PermissionVerdict, RmngConfig, Runtime,
+    SessionStore, socket_path, IntentValidator, IntegrationRegistry,
 };
 use rmng_nervous::{load_skill, load_skill_index, AgentRouter, NervousConnector, RouteOutcome};
 
@@ -53,10 +53,15 @@ enum Commands {
     Handoff {
         #[arg(long, help = "Session id (required)")]
         session: String,
-        #[arg(long = "from", help = "Source agent id")]
-        from_agent: String,
-        #[arg(long = "to", help = "Target agent id")]
-        to_agent: String,
+        #[arg(long = "from", help = "Source agent id (ignored when --chain is set)")]
+        from_agent: Option<String>,
+        #[arg(long = "to", help = "Target agent id (ignored when --chain is set)")]
+        to_agent: Option<String>,
+        #[arg(
+            long,
+            help = "Comma-separated handoff chain, e.g. swarm-coordinator,repo-keeper,runtime-executor"
+        )]
+        chain: Option<String>,
         #[arg(long, default_value = "explicit handoff")]
         reason: String,
         #[arg(help = "Task prompt for the target agent")]
@@ -76,8 +81,18 @@ enum Commands {
 enum SessionCommands {
     /// Create a new session
     New,
-    /// List session ids
-    List,
+    /// List session ids (use --verbose for active/stale status)
+    List {
+        #[arg(short, long)]
+        verbose: bool,
+    },
+    /// Remove sessions older than N days (ADR-018)
+    Prune {
+        #[arg(long, default_value = "30")]
+        older_than_days: u32,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Show session details
     Show { id: String },
     /// Set a shared context key (JSON value)
@@ -89,7 +104,27 @@ enum SessionCommands {
     },
 }
 
-async fn dispatch_core_intent(intent: &CoreIntent, dry_run: bool) -> i32 {
+fn maybe_persist_session_result(
+    session_id: Option<&str>,
+    intent: &CoreIntent,
+    resp: &HandleResponse,
+) {
+    let sid = session_id
+        .or_else(|| intent.metadata().and_then(|m| m.session_id.as_deref()));
+    let Some(sid) = sid else {
+        return;
+    };
+    let store = SessionStore::default_store();
+    if let Err(e) = persist_dispatch_to_session(&store, sid, intent, resp) {
+        eprintln!("session write-back: {e}");
+    }
+}
+
+async fn dispatch_core_intent(
+    intent: &CoreIntent,
+    dry_run: bool,
+    session_id: Option<&str>,
+) -> i32 {
     println!(
         "Intent: {}",
         serde_json::to_string_pretty(intent).expect("serialize intent")
@@ -117,6 +152,7 @@ async fn dispatch_core_intent(intent: &CoreIntent, dry_run: bool) -> i32 {
                 Ok(line) => {
                     let resp: HandleResponse = serde_json::from_str(line.trim())
                         .unwrap_or_else(|e| HandleResponse::failure(e.to_string()));
+                    maybe_persist_session_result(session_id, intent, &resp);
                     print_response(&resp)
                 }
                 Err(e) => {
@@ -237,7 +273,7 @@ async fn main() {
             let incoming = parse_incoming(&json).expect("valid intent");
             match incoming {
                 IncomingIntent::V1(intent) => execute_intent(&intent, false).await,
-                IncomingIntent::Core(intent) => dispatch_core_intent(&intent, false).await,
+                IncomingIntent::Core(intent) => dispatch_core_intent(&intent, false, None).await,
             }
         }
         Commands::Send { file } => {
@@ -317,7 +353,7 @@ async fn main() {
                                 handoff_from,
                             );
                         }
-                        dispatch_core_intent(&intent, dry_run).await
+                        dispatch_core_intent(&intent, dry_run, session.as_deref()).await
                     }
                     Err(e) => {
                         eprintln!("agent router: {e}");
@@ -340,7 +376,7 @@ async fn main() {
                 let skill_ref = loaded_skill.as_ref();
                 let skill_name = skill.as_deref();
                 match connector.reason_core(&prompt, skill_name, skill_ref).await {
-                    Ok(intent) => dispatch_core_intent(&intent, dry_run).await,
+                    Ok(intent) => dispatch_core_intent(&intent, dry_run, None).await,
                     Err(e) => {
                         eprintln!("nervous system: {e}");
                         1
@@ -353,15 +389,39 @@ async fn main() {
             session,
             from_agent,
             to_agent,
+            chain,
             reason,
             prompt,
             dry_run,
         } => {
             let router = AgentRouter::load();
-            match router
-                .handoff(&session, &from_agent, &to_agent, &prompt, &reason)
-                .await
-            {
+            let chain_agents: Option<Vec<String>> = chain.as_ref().map(|c| {
+                c.split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            });
+            let handoff_result = if let Some(agents) = chain_agents.as_ref() {
+                if agents.len() < 2 {
+                    eprintln!("--chain requires at least two agents");
+                    std::process::exit(1);
+                }
+                router
+                    .handoff_chain(&session, agents, &prompt, &reason)
+                    .await
+            } else {
+                let from = from_agent.as_deref().unwrap_or_else(|| {
+                    eprintln!("--from is required unless --chain is set");
+                    std::process::exit(1);
+                });
+                let to = to_agent.as_deref().unwrap_or_else(|| {
+                    eprintln!("--to is required unless --chain is set");
+                    std::process::exit(1);
+                });
+                router.handoff(&session, from, to, &prompt, &reason).await
+            };
+            match handoff_result {
                 Ok(outcome) => {
                     if let RouteOutcome::Handoff {
                         from_agent,
@@ -386,7 +446,7 @@ async fn main() {
                         Some(session.as_str()),
                         handoff_from,
                     );
-                    dispatch_core_intent(&intent, dry_run).await
+                    dispatch_core_intent(&intent, dry_run, Some(session.as_str())).await
                 }
                 Err(e) => {
                     eprintln!("handoff: {e}");
@@ -409,15 +469,63 @@ async fn main() {
                     }
                 }
             }
-            SessionCommands::List => {
+            SessionCommands::List { verbose } => {
                 let store = SessionStore::default_store();
                 match store.list_ids() {
                     Ok(ids) => {
                         if ids.is_empty() {
                             println!("(no sessions)");
+                        } else if verbose {
+                            for id in ids {
+                                match store.load(&id) {
+                                    Ok(session) => {
+                                        let status = session.freshness_label(7);
+                                        println!(
+                                            "{id}  {status}  updated={}  handoffs={}",
+                                            session.updated_at.to_rfc3339(),
+                                            session.handoff_history.len()
+                                        );
+                                    }
+                                    Err(e) => println!("{id}  error: {e}"),
+                                }
+                            }
                         } else {
                             for id in ids {
                                 println!("{id}");
+                            }
+                        }
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                        1
+                    }
+                }
+            }
+            SessionCommands::Prune {
+                older_than_days,
+                dry_run,
+            } => {
+                let store = SessionStore::default_store();
+                match store.prune_older_than(older_than_days, dry_run) {
+                    Ok(removed) => {
+                        if removed.is_empty() {
+                            println!("(no sessions older than {older_than_days} days)");
+                        } else if dry_run {
+                            println!(
+                                "would prune {} session(s) older than {older_than_days} days:",
+                                removed.len()
+                            );
+                            for id in removed {
+                                println!("  {id}");
+                            }
+                        } else {
+                            println!(
+                                "pruned {} session(s) older than {older_than_days} days",
+                                removed.len()
+                            );
+                            for id in removed {
+                                println!("  {id}");
                             }
                         }
                         0
@@ -495,7 +603,7 @@ async fn main() {
         Commands::Status => {
             let cfg = RmngConfig::load();
             let connector = NervousConnector::from_config(cfg);
-            println!("rmng 0.1.0 — Sprint 3 (multi-level agents + sessions)");
+            println!("rmng 0.1.0 — Sprint 4b (shared context write-back + multi-hop handoffs)");
             if let Ok(reg) = IntegrationRegistry::load() {
                 println!(
                     "integrations: {} manifests, {} tools",

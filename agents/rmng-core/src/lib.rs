@@ -18,7 +18,10 @@ pub mod validator;
 pub use allowlist::{McpAllowlist, McpServerConfig};
 pub use audit::{AuditEntry, AuditLog, AuditTrack};
 pub use registry::{IntegrationManifest, IntegrationRegistry, ToolManifest};
-pub use session::{AgentSession, HandoffRecord, SessionError, SessionStore};
+pub use session::{
+    build_tool_result_record, persist_dispatch_to_session, AgentSession, HandoffRecord,
+    SessionError, SessionStore, ToolResultRecord, MAX_TOOL_OUTPUT_LEN,
+};
 pub use validator::IntentValidator;
 pub use config::{LlmConfig, LlmProvider, RmngConfig};
 pub use dispatch::Runtime;

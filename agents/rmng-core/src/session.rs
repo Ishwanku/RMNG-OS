@@ -1,7 +1,14 @@
+use crate::intent::CoreIntent;
+use crate::response::HandleResponse;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+/// Max characters stored per tool output in session shared context.
+pub const MAX_TOOL_OUTPUT_LEN: usize = 4096;
+/// Max tool result records retained per session.
+const MAX_TOOL_RESULTS: usize = 50;
 
 /// Persistent multi-agent session at `~/.rmng/sessions/<id>.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -34,6 +41,20 @@ pub struct TaskState {
     pub current_prompt: Option<String>,
     #[serde(default)]
     pub notes: Vec<String>,
+}
+
+/// Tool execution result written back into session shared context (Sprint 4b).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ToolResultRecord {
+    pub timestamp: DateTime<Utc>,
+    pub tool: String,
+    pub parameters: serde_json::Value,
+    pub output: String,
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handoff_from: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -186,6 +207,42 @@ impl SessionStore {
         self.save(session)
     }
 
+    /// Append a tool/MCP dispatch result to `shared_context.tool_results`.
+    pub fn record_tool_result(
+        &self,
+        session: &mut AgentSession,
+        record: ToolResultRecord,
+    ) -> Result<(), SessionError> {
+        let entry = session
+            .shared_context
+            .entry("tool_results".to_string())
+            .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+        if let Some(list) = entry.as_array_mut() {
+            list.push(serde_json::to_value(&record)?);
+            while list.len() > MAX_TOOL_RESULTS {
+                list.remove(0);
+            }
+        }
+        session.updated_at = Utc::now();
+        self.save(session)
+    }
+
+    /// Remove sessions with `updated_at` older than `days`. Returns removed ids.
+    pub fn prune_older_than(&self, days: u32, dry_run: bool) -> Result<Vec<String>, SessionError> {
+        let cutoff = Utc::now() - chrono::Duration::days(days as i64);
+        let mut removed = Vec::new();
+        for id in self.list_ids()? {
+            let session = self.load(&id)?;
+            if session.updated_at < cutoff {
+                removed.push(id.clone());
+                if !dry_run {
+                    std::fs::remove_file(self.path_for(&id))?;
+                }
+            }
+        }
+        Ok(removed)
+    }
+
     fn path_for(&self, id: &str) -> PathBuf {
         self.root.join(format!("{id}.json"))
     }
@@ -193,6 +250,16 @@ impl SessionStore {
 
 
 impl AgentSession {
+    /// `active` if updated within `active_within_days`, else `stale`.
+    pub fn freshness_label(&self, active_within_days: i64) -> &'static str {
+        let cutoff = Utc::now() - chrono::Duration::days(active_within_days);
+        if self.updated_at >= cutoff {
+            "active"
+        } else {
+            "stale"
+        }
+    }
+
     /// Format shared context + recent handoffs for nervous-system prompt injection.
     pub fn prompt_context(&self) -> String {
         let mut parts = Vec::new();
@@ -242,9 +309,126 @@ pub fn sessions_root() -> PathBuf {
     PathBuf::from(".rmng/sessions")
 }
 
+/// Build a session write-back record from a dispatched intent and rmngd response.
+pub fn build_tool_result_record(
+    intent: &CoreIntent,
+    resp: &HandleResponse,
+) -> Option<ToolResultRecord> {
+    let (tool, parameters) = match intent {
+        CoreIntent::ToolExecute {
+            target, parameters, ..
+        } => (target.clone(), parameters.clone()),
+        CoreIntent::McpProxy {
+            mcp_server,
+            mcp_tool,
+            mcp_args,
+            ..
+        } => (
+            format!("{mcp_server}.{mcp_tool}"),
+            mcp_args.clone(),
+        ),
+        CoreIntent::PlanOnly { .. } => return None,
+    };
+    let handoff_from = intent
+        .metadata()
+        .and_then(|m| m.handoff_from.clone());
+    let (output, success, exit_code) = if let Some(result) = &resp.tool_result {
+        let mut out = result.output.clone();
+        if out.len() > MAX_TOOL_OUTPUT_LEN {
+            out.truncate(MAX_TOOL_OUTPUT_LEN);
+            out.push_str("\n...(truncated)");
+        }
+        (out, resp.ok && result.success, result.exit_code)
+    } else if resp.ok {
+        (
+            resp.action
+                .clone()
+                .unwrap_or_else(|| "ok".into()),
+            true,
+            None,
+        )
+    } else {
+        (
+            resp.error
+                .clone()
+                .unwrap_or_else(|| "unknown error".into()),
+            false,
+            None,
+        )
+    };
+    Some(ToolResultRecord {
+        timestamp: Utc::now(),
+        tool,
+        parameters,
+        output,
+        success,
+        exit_code,
+        handoff_from,
+    })
+}
+
+/// After rmngd dispatch, persist tool output into the session when `--session` is active.
+pub fn persist_dispatch_to_session(
+    store: &SessionStore,
+    session_id: &str,
+    intent: &CoreIntent,
+    resp: &HandleResponse,
+) -> Result<(), SessionError> {
+    let Some(record) = build_tool_result_record(intent, resp) else {
+        return Ok(());
+    };
+    let mut session = store.load(session_id)?;
+    store.record_tool_result(&mut session, record)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn record_tool_result_in_shared_context() {
+        let dir = std::env::temp_dir().join(format!("rmng-tool-ctx-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let session = store.create().expect("create");
+        let intent = CoreIntent::ToolExecute {
+            target: "git.status".into(),
+            parameters: serde_json::json!({}),
+            metadata: None,
+        };
+        let resp = HandleResponse::core_success(
+            "tool.execute:git.status",
+            Some(crate::tool::ToolResult {
+                success: true,
+                output: "branch main".into(),
+                exit_code: Some(0),
+            }),
+        );
+        persist_dispatch_to_session(&store, &session.id, &intent, &resp).expect("persist");
+        let loaded = store.load(&session.id).expect("load");
+        let results = loaded
+            .shared_context
+            .get("tool_results")
+            .and_then(|v| v.as_array())
+            .expect("tool_results array");
+        assert_eq!(results.len(), 1);
+        assert!(results[0]["output"].as_str().unwrap().contains("branch main"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn prune_removes_old_sessions() {
+        let dir = std::env::temp_dir().join(format!("rmng-prune-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let mut session = store.create().expect("create");
+        session.updated_at = Utc::now() - chrono::Duration::days(60);
+        store.save(&session).expect("save stale");
+        let fresh = store.create().expect("create fresh");
+        let removed = store.prune_older_than(30, false).expect("prune");
+        assert_eq!(removed.len(), 1);
+        assert_eq!(removed[0], session.id);
+        assert!(store.load(&fresh.id).is_ok());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn create_load_and_handoff() {

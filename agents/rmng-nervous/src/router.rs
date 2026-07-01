@@ -177,6 +177,50 @@ impl AgentRouter {
         })
     }
 
+    /// Multi-hop handoff chain (e.g. L4 → L3 → L2). Records every hop in session history.
+    pub async fn handoff_chain(
+        &self,
+        session_id: &str,
+        chain: &[String],
+        prompt: &str,
+        reason: &str,
+    ) -> Result<RouteOutcome, RouterError> {
+        if chain.len() < 2 {
+            return Err(RouterError::Session(
+                "handoff chain requires at least two agents".into(),
+            ));
+        }
+        let mut last: Option<RouteOutcome> = None;
+        for i in 0..chain.len() - 1 {
+            let from_id = &chain[i];
+            let to_id = &chain[i + 1];
+            let hop_reason = if i == 0 {
+                reason.to_string()
+            } else {
+                format!("chain hop {from_id} → {to_id}")
+            };
+            let outcome = self
+                .handoff(session_id, from_id, to_id, prompt, &hop_reason)
+                .await?;
+            if let RouteOutcome::Handoff {
+                from_agent,
+                to_agent,
+                from_layer,
+                to_layer,
+                reason: hop,
+                ..
+            } = &outcome
+            {
+                tracing::info!(
+                    session = session_id,
+                    "{from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {hop}"
+                );
+            }
+            last = Some(outcome);
+        }
+        last.ok_or_else(|| RouterError::Session("empty handoff chain".into()))
+    }
+
     async fn orchestrate(
         &self,
         session_id: Option<&str>,
