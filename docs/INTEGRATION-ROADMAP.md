@@ -1,0 +1,116 @@
+# External Integration Roadmap — RMNG-OS
+
+**Status:** Active (Sprint 12+)  
+**Governance:** [INTEGRATION-STRATEGY.md](INTEGRATION-STRATEGY.md) · ADR-019 · ADR-010
+
+Shift from internal hardening to **controlled external integration** — multiply LLM capability via MCP, skills, and auditable tools without blurring Nervous/Body boundaries.
+
+---
+
+## Executive Summary
+
+The GitHub Repos analysis (130+ entries) clusters into:
+
+| Category | Count (approx) | RMNG default track |
+|----------|----------------|-------------------|
+| Full agent runtimes (LangChain, AutoGen, CrewAI, Dify…) | ~25 | **Track 4** — patterns only |
+| MCP servers & infra | ~35 | **Track 2** — primary ingestion path |
+| Skill packs & methodology | ~30 | **Track 3** — curated adaptation |
+| Observability / gateways (Langfuse, LiteLLM…) | ~20 | **Track 4** or reference |
+| Vector DBs / RAG platforms | ~15 | **Track 4** — defer |
+| IDE / chat UIs | ~15 | **Track 4** — out of scope |
+
+**RMNG already ships:** `github-mcp-server`, `mcp-server-git`, 6 skills, L1–L4 agents.
+
+---
+
+## Phase A — Next 2–3 Sprints (High Value, Low Risk)
+
+| Priority | Repository | Track | Exposure | Effort | Risk | Status |
+|----------|------------|-------|----------|--------|------|--------|
+| A1 | [modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers) (`fetch`) | 2 | `mcp.proxy` → read-only URL fetch | S | Low | **Active** |
+| A2 | [microsoft/playwright-mcp](https://github.com/microsoft/playwright-mcp) | 2 | `mcp.proxy` → DOM/a11y tree navigation | M | Med | **Active** |
+| A3 | [microsoft/markitdown](https://github.com/microsoft/markitdown) | 2 | `mcp.proxy` → doc→markdown for context | M | Low | **Evaluating** |
+| A4 | [obra/superpowers](https://github.com/obra/superpowers) | 3 | `skills/tdd-discipline` — phase-gated TDD | S | Low | **Active** |
+| A5 | [anthropics/skills](https://github.com/anthropics/skills) | 3 | Selective skill adaptation (spec format) | S | Low | **Active** |
+| A6 | [github/github-mcp-server](https://github.com/github/github-mcp-server) | 2 | Expand allowlist (`list_issues`, `search_code`) | S | Low | **Planned** |
+| A7 | [mcp-server-git](https://github.com/modelcontextprotocol/servers/tree/main/src/git) | 2 | Expand tools (`git.diff`, `git.status`) | S | Low | **Planned** |
+
+### Phase A rejections (documented, not wired)
+
+| Repository | Track | Reason |
+|------------|-------|--------|
+| [upstash/context7](https://github.com/upstash/context7) | 4 | ContextCrush / indirect prompt injection (doc analysis) |
+| [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers) | 4 | Unbounded surface — use as catalog only |
+| [langchain-ai/langchain](https://github.com/langchain-ai/langchain) | 4 | In-process agent loop replaces RMNG nervous |
+
+---
+
+## Phase B — Medium Risk / Higher Reward (Sprints 14–16)
+
+| Repository | Track | Value | Effort | Risk |
+|------------|-------|-------|--------|------|
+| [mem0ai/mem0](https://github.com/mem0ai/mem0) | 2 or 3 | Long-term agent memory patterns | M | Med |
+| [BerriAI/litellm](https://github.com/litellm/litellm) | 4 | Reference for gateway routing — RMNG has native providers | L | Med |
+| [langfuse/langfuse](https://github.com/langfuse/langfuse) | 4 | External trace UI — complement audit.jsonl | M | Low |
+| [promptfoo/promptfoo](https://github.com/promptfoo/promptfoo) | 3 | Eval/red-team skill pack for CI | M | Low |
+| [e2b-dev/E2B](https://github.com/e2b-dev/e2b) | 2 | Sandboxed code exec MCP (future high-risk tools) | L | High |
+| [ChromeDevTools/chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) | 2 | Deep browser debug — after Playwright stable | M | Med |
+| `kernel.status` native expansion | 1 | Hot-path kernel ops — small Rust handlers | M | Low |
+
+---
+
+## Phase C — Long-Term / Experimental
+
+| Repository | Track | Notes |
+|------------|-------|-------|
+| [microsoft/autogen](https://github.com/microsoft/autogen) | 4 | Multi-agent conversation patterns → L4 skill only |
+| [crewAIInc/crewAI](https://github.com/crewAIInc/crewAI) | 4 | Role-based crews → map to RMNG handoff chains |
+| [geekan/MetaGPT](https://github.com/geekan/MetaGPT) | 4 | SOP emulation — skill extraction only |
+| [All-Hands-AI/OpenHands](https://github.com/All-Hands-AI/OpenHands) | 4 | Full autonomous dev — Docker sandbox prerequisite |
+| [langgenius/dify](https://github.com/langgenius/dify) | 4 | Competing orchestration plane |
+| [infiniflow/ragflow](https://github.com/infiniflow/ragflow) | 4 | Heavy RAG stack — defer |
+| [agentgateway/agentgateway](https://github.com/agentgateway/agentgateway) | 4 | MCP gateway — evaluate when multi-tenant |
+
+---
+
+## Top 12 Highest-Value Repositories (Ranked)
+
+1. **modelcontextprotocol/servers** (fetch, git) — canonical MCP; extends body without Rust churn  
+2. **microsoft/playwright-mcp** — DOM-first web agent; complements research-curator  
+3. **github/github-mcp-server** — already partial; expand for issue/PR intelligence  
+4. **obra/superpowers** — anti-drift TDD methodology → Track 3  
+5. **anthropics/skills** — agentskills.io format alignment  
+6. **microsoft/markitdown** — token-efficient document ingestion  
+7. **mem0ai/mem0** — session memory beyond `shared_context`  
+8. **promptfoo/promptfoo** — nervous prompt regression testing  
+9. **e2b-dev/E2B** — sandboxed execution for future code tools  
+10. **openai/openai-agents-python** — handoff/guardrail patterns (Track 3/4 reference)  
+11. **agentskills/agentskills** — skill spec compliance  
+12. **langfuse/langfuse** — optional external dashboard for audit/cost
+
+---
+
+## Sprint 12 First Batch Status
+
+| Item | Track | Deliverable | Status |
+|------|-------|-------------|--------|
+| MCP Fetch | 2 | allowlist + doc + example intent | ✅ Started |
+| Playwright MCP | 2 | allowlist + doc + web-researcher agent | ✅ Started |
+| TDD discipline skill | 3 | `skills/tdd-discipline/SKILL.md` | ✅ Started |
+| MCP integration skill | 3 | `skills/mcp-integration/SKILL.md` | ✅ Started |
+| Anthropic skills alignment | 3 | `skills/spec-compliance/SKILL.md` | ✅ Started |
+| Markitdown MCP | 2 | intake doc only | 🔄 Evaluating |
+| Context7 | 4 | rejection doc | ✅ Documented |
+
+---
+
+## How to Continue
+
+1. **One MCP server per sprint** — register, test, audit, document  
+2. **Two skills per sprint** — adapt external methodology, never vend wholesale  
+3. **Agent YAML updates** — wire new MCP tools to L3 agents with least privilege  
+4. **E2E test** — `agents/tests/mcp_e2e.rs` pattern for each new server  
+5. **Never batch-allowlist** — explicit `allowed_tools` per server
+
+See [integrations/README.md](integrations/README.md) for per-repo intake records.

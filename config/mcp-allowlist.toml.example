@@ -35,6 +35,24 @@ command = "uvx"
 args = ["mcp-server-git", "--repository", "/path/to/RMNG-OS"]
 allowed_tools = ["git.log"]
 
+# Sprint 12 — read-only URL fetch (Track 2)
+[servers.fetch]
+enabled = true
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-fetch"]
+allowed_tools = ["fetch"]
+
+# Sprint 12 — DOM navigation (opt-in: disabled by default)
+[servers.playwright]
+enabled = false
+command = "npx"
+args = ["-y", "@playwright/mcp@latest"]
+allowed_tools = ["browser_navigate", "browser_snapshot", "browser_click"]
+# [servers.playwright.isolation]
+# memory_mb = 1024
+# pids_max = 128
+# cgroup = true
+
 # Per-server isolation override (optional — merges over global [isolation] in config.toml)
 # [servers.git.isolation]
 # memory_mb = 256

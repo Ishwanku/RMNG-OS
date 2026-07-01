@@ -175,6 +175,8 @@ pub fn catalog_model_pricing(provider_key: &str, model_id: &str) -> Option<(f64,
     let model = entry.models.iter().find(|m| m.id == model_id)?;
     match (model.input_cost_per_m, model.output_cost_per_m) {
         (Some(i), Some(o)) => Some((i, o)),
+        (Some(i), None) => Some((i, i)),
+        (None, Some(o)) => Some((o, o)),
         _ => None,
     }
 }

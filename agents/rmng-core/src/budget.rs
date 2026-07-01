@@ -25,21 +25,56 @@ pub struct BudgetCheckResult {
 
 /// Sum LLM costs from audit log for UTC calendar day containing `now`.
 pub fn spent_today_usd(entries: &[AuditEntry], now: DateTime<Utc>) -> f64 {
+    spent_today_for_agent(entries, now, None)
+}
+
+/// Sum today's LLM cost, optionally scoped to one agent_id.
+pub fn spent_today_for_agent(
+    entries: &[AuditEntry],
+    now: DateTime<Utc>,
+    agent_id: Option<&str>,
+) -> f64 {
     let day = now.format("%Y-%m-%d").to_string();
     entries
         .iter()
         .filter(|e| e.category == Some(AuditCategory::Llm))
         .filter(|e| e.timestamp.format("%Y-%m-%d").to_string() == day)
+        .filter(|e| match agent_id {
+            Some(aid) => e.agent_id.as_deref() == Some(aid),
+            None => true,
+        })
         .filter_map(|e| e.cost_usd)
         .sum()
 }
 
+fn resolve_daily_cap(cfg: &RmngConfig, agent_cap: Option<f64>) -> Option<f64> {
+    agent_cap
+        .or_else(|| {
+            cfg.profile.as_deref().and_then(|name| {
+                cfg.profiles
+                    .iter()
+                    .find(|p| p.name == name)
+                    .and_then(|p| p.daily_budget_usd)
+            })
+        })
+        .or(cfg.llm_budget.daily_usd)
+}
+
 pub fn check_budget(cfg: &RmngConfig, entries: &[AuditEntry]) -> Option<BudgetCheckResult> {
+    check_budget_for_agent(cfg, entries, None, None)
+}
+
+pub fn check_budget_for_agent(
+    cfg: &RmngConfig,
+    entries: &[AuditEntry],
+    agent_id: Option<&str>,
+    agent_cap: Option<f64>,
+) -> Option<BudgetCheckResult> {
     let budget = &cfg.llm_budget;
     if budget.enforce == BudgetEnforceMode::Off {
         return None;
     }
-    let daily = budget.daily_usd?;
+    let daily = resolve_daily_cap(cfg, agent_cap)?;
     if daily <= 0.0 {
         return None;
     }
@@ -47,7 +82,7 @@ pub fn check_budget(cfg: &RmngConfig, entries: &[AuditEntry]) -> Option<BudgetCh
     let deny_frac = budget.deny_threshold.unwrap_or(1.0);
     let warn_at = daily * warn_frac;
     let deny_at = daily * deny_frac;
-    let spent = spent_today_usd(entries, Utc::now());
+    let spent = spent_today_for_agent(entries, Utc::now(), agent_id);
 
     let level = if spent >= deny_at {
         BudgetLevel::Deny
@@ -62,10 +97,15 @@ pub fn check_budget(cfg: &RmngConfig, entries: &[AuditEntry]) -> Option<BudgetCh
         BudgetEnforceMode::Warn | BudgetEnforceMode::Off => true,
     };
 
+    let scope = agent_id.map(|a| format!(" agent={a}")).unwrap_or_default();
     let message = match level {
-        BudgetLevel::Ok => format!("spent ${spent:.4} / ${daily:.2} today"),
-        BudgetLevel::Warn => format!("budget warn: spent ${spent:.4} >= ${warn_at:.2} (cap ${daily:.2})"),
-        BudgetLevel::Deny => format!("budget deny: spent ${spent:.4} >= ${deny_at:.2} (cap ${daily:.2})"),
+        BudgetLevel::Ok => format!("spent ${spent:.4} / ${daily:.2} today{scope}"),
+        BudgetLevel::Warn => {
+            format!("budget warn: spent ${spent:.4} >= ${warn_at:.2} (cap ${daily:.2}){scope}")
+        }
+        BudgetLevel::Deny => {
+            format!("budget deny: spent ${spent:.4} >= ${deny_at:.2} (cap ${daily:.2}){scope}")
+        }
     };
 
     Some(BudgetCheckResult {
@@ -80,9 +120,17 @@ pub fn check_budget(cfg: &RmngConfig, entries: &[AuditEntry]) -> Option<BudgetCh
 }
 
 pub fn check_budget_from_audit(cfg: &RmngConfig) -> Option<BudgetCheckResult> {
+    check_budget_from_audit_for_agent(cfg, None, None)
+}
+
+pub fn check_budget_from_audit_for_agent(
+    cfg: &RmngConfig,
+    agent_id: Option<&str>,
+    agent_cap: Option<f64>,
+) -> Option<BudgetCheckResult> {
     let log = AuditLog::new(AuditLog::default_path());
     let entries = log.read_all().ok()?;
-    check_budget(cfg, &entries)
+    check_budget_for_agent(cfg, &entries, agent_id, agent_cap)
 }
 
 #[cfg(test)]

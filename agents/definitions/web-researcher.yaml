@@ -1,0 +1,17 @@
+id: web-researcher
+layer: L3
+description: >-
+  Web research specialist — fetches URL content and optional DOM snapshots via
+  MCP. Read-only; no git or kernel operations.
+skills:
+  - research-workflow
+  - mcp-integration
+  - phase-gates
+allowed_native_tools: []
+allowed_mcp_tools:
+  - fetch:fetch
+  # Enable playwright only after explicit allowlist registration:
+  # - playwright:browser_navigate
+  # - playwright:browser_snapshot
+delegates_to: []
+daily_budget_usd: 2.0

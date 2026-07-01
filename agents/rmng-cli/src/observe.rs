@@ -409,10 +409,11 @@ fn print_cost_rollups(
             );
         }
     }
-    if !rollup.by_session.is_empty() {
+    if !rollup.by_session_ranked.is_empty() {
         println!();
         println!("-- by session --");
-        for (sid, v) in rollup.by_session.iter().take(10) {
+        for v in rollup.by_session_ranked.iter().take(10) {
+            let sid = &v.id;
             println!(
                 "  {sid}  ${:.4}  {} calls  tokens={}+{}",
                 v.cost_usd,
@@ -422,10 +423,11 @@ fn print_cost_rollups(
             );
         }
     }
-    if !rollup.by_agent.is_empty() {
+    if !rollup.by_agent_ranked.is_empty() {
         println!();
         println!("-- by agent --");
-        for (aid, v) in rollup.by_agent.iter().take(10) {
+        for v in rollup.by_agent_ranked.iter().take(10) {
+            let aid = &v.id;
             println!(
                 "  {aid}  ${:.4}  {} calls",
                 v.cost_usd, v.llm_calls

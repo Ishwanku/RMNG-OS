@@ -19,12 +19,24 @@ pub struct PeriodCost {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RankedEntityCost {
+    pub id: String,
+    pub cost_usd: f64,
+    pub llm_calls: u64,
+    pub tokens_prompt: u64,
+    pub tokens_completion: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CostRollupReport {
     pub generated_at: String,
     pub total_cost_usd: f64,
     pub total_llm_calls: u64,
     pub by_session: HashMap<String, EntityCost>,
     pub by_agent: HashMap<String, EntityCost>,
+    /// Cost-sorted session rollups (stable order for CLI/JSON).
+    pub by_session_ranked: Vec<RankedEntityCost>,
+    pub by_agent_ranked: Vec<RankedEntityCost>,
     pub daily: Vec<PeriodCost>,
     pub weekly: Vec<PeriodCost>,
 }
@@ -98,11 +110,31 @@ pub fn rollup_llm_costs(entries: &[AuditEntry]) -> CostRollupReport {
     // Sort entity maps by cost descending for display
     let mut session_vec: Vec<_> = by_session.into_iter().collect();
     session_vec.sort_by(|a, b| b.1.cost_usd.partial_cmp(&a.1.cost_usd).unwrap_or(std::cmp::Ordering::Equal));
-    let by_session: HashMap<_, _> = session_vec.into_iter().collect();
+    let by_session: HashMap<_, _> = session_vec.iter().cloned().collect();
+    let by_session_ranked: Vec<RankedEntityCost> = session_vec
+        .into_iter()
+        .map(|(id, v)| RankedEntityCost {
+            id,
+            cost_usd: v.cost_usd,
+            llm_calls: v.llm_calls,
+            tokens_prompt: v.tokens_prompt,
+            tokens_completion: v.tokens_completion,
+        })
+        .collect();
 
     let mut agent_vec: Vec<_> = by_agent.into_iter().collect();
     agent_vec.sort_by(|a, b| b.1.cost_usd.partial_cmp(&a.1.cost_usd).unwrap_or(std::cmp::Ordering::Equal));
-    let by_agent: HashMap<_, _> = agent_vec.into_iter().collect();
+    let by_agent: HashMap<_, _> = agent_vec.iter().cloned().collect();
+    let by_agent_ranked: Vec<RankedEntityCost> = agent_vec
+        .into_iter()
+        .map(|(id, v)| RankedEntityCost {
+            id,
+            cost_usd: v.cost_usd,
+            llm_calls: v.llm_calls,
+            tokens_prompt: v.tokens_prompt,
+            tokens_completion: v.tokens_completion,
+        })
+        .collect();
 
     CostRollupReport {
         generated_at: now.to_rfc3339(),
@@ -110,6 +142,8 @@ pub fn rollup_llm_costs(entries: &[AuditEntry]) -> CostRollupReport {
         total_llm_calls: total_calls,
         by_session,
         by_agent,
+        by_session_ranked,
+        by_agent_ranked,
         daily,
         weekly,
     }
@@ -144,7 +178,7 @@ mod tests {
         e2.cost_usd = Some(0.2);
         let r = rollup_llm_costs(&[e1, e2]);
         assert!((r.total_cost_usd - 0.3).abs() < 0.001);
-        assert_eq!(r.by_session.get("s1").unwrap().llm_calls, 2);
-        assert_eq!(r.by_agent.get("repo-keeper").unwrap().llm_calls, 2);
+        assert_eq!(r.by_session_ranked[0].llm_calls, 2);
+        assert_eq!(r.by_agent_ranked[0].llm_calls, 2);
     }
 }

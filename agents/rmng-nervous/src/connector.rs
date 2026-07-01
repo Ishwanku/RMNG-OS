@@ -9,7 +9,7 @@ use crate::providers::{
 use crate::skill::{assemble_prompt_full, AgentSkill};
 use rmng_core::session::{LlmCallRecord, SessionStore};
 use rmng_core::AgentSession;
-use rmng_core::{check_budget_from_audit, BudgetLevel, CoreIntent, RmngConfig};
+use rmng_core::{check_budget_from_audit_for_agent, BudgetLevel, CoreIntent, RmngConfig};
 use std::time::Instant;
 
 #[derive(Debug, thiserror::Error)]
@@ -102,7 +102,11 @@ impl NervousConnector {
             ));
         }
 
-        if let Some(budget) = check_budget_from_audit(&self.config) {
+        let budget_agent = agent.map(|a| a.id.as_str());
+        let agent_cap = agent.and_then(|a| a.daily_budget_usd);
+        if let Some(budget) =
+            check_budget_from_audit_for_agent(&self.config, budget_agent, agent_cap)
+        {
             if budget.level == BudgetLevel::Warn {
                 log_system_event(
                     "nervous.budget_warn",

@@ -1,0 +1,14 @@
+{
+  "schema_version": "2",
+  "action": "mcp.proxy",
+  "server": "fetch",
+  "tool": "fetch",
+  "params": {
+    "url": "https://modelcontextprotocol.io/introduction",
+    "max_length": 5000
+  },
+  "metadata": {
+    "agent_id": "web-researcher",
+    "reason": "integration smoke test"
+  }
+}

@@ -65,6 +65,11 @@ model = "llama3.2"
 # deny_threshold = 1.0
 # enforce = "warn"   # off | warn | deny
 
+# Per-profile budget override (optional):
+# [[profiles]]
+# name = "gemini-fast"
+# daily_budget_usd = 3.0
+
 # Subprocess isolation defaults for MCP tools (Sprint 10)
 [isolation]
 memory_mb = 512

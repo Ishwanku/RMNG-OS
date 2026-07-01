@@ -108,6 +108,9 @@ pub struct LlmProfile {
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
     pub top_p: Option<f32>,
+    /// Per-profile daily USD cap (Sprint 12) — overrides global `llm_budget.daily_usd` when set.
+    #[serde(default)]
+    pub daily_budget_usd: Option<f64>,
 }
 
 impl LlmProfile {

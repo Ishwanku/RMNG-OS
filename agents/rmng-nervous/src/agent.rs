@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// RMNG specialist agent manifest (`agents/definitions/*.yaml`).
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AgentDefinition {
     pub id: String,
     pub description: String,
@@ -30,6 +30,9 @@ pub struct AgentDefinition {
     /// Per-agent model id override.
     #[serde(default)]
     pub model: Option<String>,
+    /// Per-agent daily USD cap for budget enforcement (Sprint 12).
+    #[serde(default)]
+    pub daily_budget_usd: Option<f64>,
     /// Fallback profile names from `~/.rmng/config.toml` (Sprint 8).
     #[serde(default)]
     pub llm_fallback: Vec<String>,

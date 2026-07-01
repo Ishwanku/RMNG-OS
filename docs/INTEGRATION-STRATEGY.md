@@ -151,6 +151,16 @@ RMNG-OS/
 3. Implement **one** Track-2 MCP at a time; prefer **Track-1** for hot-path tools
 4. Never batch-allowlist tools without per-tool review
 
+**Sprint 12+:** See [INTEGRATION-ROADMAP.md](INTEGRATION-ROADMAP.md) for phased plan (A/B/C) and first-batch status. Source analysis: user GitHub Repos catalog (130+ entries).
+
+### Sprint 12 focus
+
+| Track | Current work |
+|-------|----------------|
+| 2 | `fetch`, `playwright` MCP servers + `web-researcher` agent |
+| 3 | `tdd-discipline`, `mcp-integration`, `spec-compliance` skills |
+| 4 | `context7` rejected; LangChain/AutoGen/Dify deferred |
+
 See also: [PLAN-AGENTS-MCP-SKILLS.md](PLAN-AGENTS-MCP-SKILLS.md) · [DECISIONS.md](DECISIONS.md) · [daily-workflow.md](daily-workflow.md)
 
 ---

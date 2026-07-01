@@ -10,7 +10,13 @@ Per-repository evaluation records for open-source AI/agent/MCP projects consider
 |----------|------|-------|--------|
 | [github-mcp.md](github-mcp.md) | `@github/github-mcp-server` | 2 — MCP Proxy | **Active** (allowlisted) |
 | [git-mcp.md](git-mcp.md) | `mcp-server-git` | 2 — MCP Proxy | **Active** (allowlisted) |
+| [mcp-fetch.md](mcp-fetch.md) | `@modelcontextprotocol/server-fetch` | 2 — MCP Proxy | **Active** (Sprint 12) |
+| [playwright-mcp.md](playwright-mcp.md) | `@playwright/mcp` | 2 — MCP Proxy | **Active** (opt-in) |
+| [superpowers-skill.md](superpowers-skill.md) | `obra/superpowers` | 3 — Skill | **Active** (adapted) |
+| [context7-rejected.md](context7-rejected.md) | `upstash/context7` | 4 — Rejected | **Rejected** |
 | _future_ | Use [TEMPLATE.md](TEMPLATE.md) | — | Intake |
+
+**Roadmap:** [INTEGRATION-ROADMAP.md](../INTEGRATION-ROADMAP.md)
 
 ## Quick commands
 
