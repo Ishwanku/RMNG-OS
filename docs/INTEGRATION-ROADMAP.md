@@ -50,7 +50,7 @@ The GitHub Repos analysis (130+ entries) clusters into:
 
 | Repository | Track | Value | Effort | Risk |
 |------------|-------|-------|--------|------|
-| [mem0ai/mem0](https://github.com/mem0ai/mem0) | 2 or 3 | Long-term agent memory patterns | M | Med |
+| [mem0ai/mem0](https://github.com/mem0ai/mem0) | 2 + 3 | Long-term memory via Mem0 MCP | M | Med | **Active** (Sprint 15) |
 | [BerriAI/litellm](https://github.com/litellm/litellm) | 4 | Reference for gateway routing — RMNG has native providers | L | Med |
 | [langfuse/langfuse](https://github.com/langfuse/langfuse) | 4 | External trace UI — complement audit.jsonl | M | Low |
 | [promptfoo/promptfoo](https://github.com/promptfoo/promptfoo) | 3 | Eval/red-team skill pack for CI | M | Low |
@@ -123,3 +123,11 @@ See [integrations/README.md](integrations/README.md) for per-repo intake records
 | Git MCP expand | 2 | git.diff, git.status + repo-keeper scope | ✅ Complete |
 | Markitdown live E2E | 2 | rmngd full loop + session write-back | ✅ Complete |
 | Usage docs | — | browser-research, code-workflow guides | ✅ Complete |
+## Sprint 15 Status
+
+| Item | Track | Deliverable | Status |
+|------|-------|-------------|--------|
+| Mem0 MCP | 2 | add/search/get/delete + session write-back | ✅ Complete |
+| memory-management skill | 3 | hygiene + privacy guidance | ✅ Complete |
+| Agent memory scope | L3 | research-curator, web-researcher, repo-keeper | ✅ Complete |
+| Usage docs | — | mem0-mcp.md, memory-usage.md | ✅ Complete |

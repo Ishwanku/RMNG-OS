@@ -81,3 +81,17 @@ no_new_privs = true
 # [servers.git.isolation]
 # memory_mb = 256
 # cgroup = true
+
+# Sprint 15 — long-term memory (opt-in; requires MEM0_API_KEY in rmngd env)
+[servers.mem0]
+enabled = false
+command = "uvx"
+args = ["mem0-mcp-server"]
+allowed_tools = ["add_memory", "search_memories", "get_memory", "delete_memory"]
+
+[servers.mem0.isolation]
+memory_mb = 512
+pids_max = 64
+cgroup = true
+new_session = true
+no_new_privs = true

@@ -2,10 +2,11 @@ id: repo-keeper
 layer: L3
 description: >-
   Repository and GitHub hygiene specialist — git status, diffs, PR context,
-  and safe commits within RMNG-OS. Does not run kernel builds.
+  and read-only memory recall. Does not run kernel builds.
 skills:
   - git-workflow
   - github-workflow
+  - memory-management
 allowed_native_tools:
   - git.status
   - git.diff
@@ -14,4 +15,7 @@ allowed_mcp_tools:
   - git:git.log
   - git:git.diff
   - git:git.status
+  - mem0:search_memories
+  - mem0:get_memory
 delegates_to: []
+daily_budget_usd: 1.0

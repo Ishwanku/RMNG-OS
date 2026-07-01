@@ -333,6 +333,62 @@ mod tests {
         assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
     }
 
+    fn test_gate_with_mem0_mcp() -> PermissionGate {
+        let mut servers = HashMap::new();
+        servers.insert(
+            "mem0".into(),
+            McpServerConfig {
+                enabled: true,
+                command: "uvx".into(),
+                args: vec!["mem0-mcp-server".into()],
+                allowed_tools: vec![
+                    "add_memory".into(),
+                    "search_memories".into(),
+                    "get_memory".into(),
+                    "delete_memory".into(),
+                ],
+                isolation: None,
+            },
+        );
+        PermissionGate::from_registry(&fixture_registry()).with_mcp_allowlist(McpAllowlist { servers })
+    }
+
+    #[test]
+    fn allows_mcp_mem0_search() {
+        let gate = test_gate_with_mem0_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "mem0".into(),
+            mcp_tool: "search_memories".into(),
+            mcp_args: serde_json::json!({"query": "RMNG", "user_id": "rmng-os"}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
+    }
+
+    #[test]
+    fn allows_mcp_mem0_add() {
+        let gate = test_gate_with_mem0_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "mem0".into(),
+            mcp_tool: "add_memory".into(),
+            mcp_args: serde_json::json!({"messages": [], "user_id": "rmng-os"}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
+    }
+
+    #[test]
+    fn denies_mcp_mem0_delete_all() {
+        let gate = test_gate_with_mem0_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "mem0".into(),
+            mcp_tool: "delete_all_memories".into(),
+            mcp_args: serde_json::json!({}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Deny(_)));
+    }
+
     #[test]
     fn denies_disallowed_mcp_tool() {
         let gate = test_gate_with_mcp();

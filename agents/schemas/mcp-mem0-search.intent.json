@@ -1,0 +1,15 @@
+{
+  "schema_version": "2",
+  "action": "mcp.proxy",
+  "server": "mem0",
+  "tool": "search_memories",
+  "params": {
+    "query": "RMNG integration decisions",
+    "user_id": "rmng-os",
+    "limit": 5
+  },
+  "metadata": {
+    "agent_id": "research-curator",
+    "reason": "memory search smoke test"
+  }
+}

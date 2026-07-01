@@ -1,0 +1,17 @@
+{
+  "schema_version": "2",
+  "action": "mcp.proxy",
+  "server": "mem0",
+  "tool": "add_memory",
+  "params": {
+    "messages": [
+      { "role": "user", "content": "RMNG-OS uses CoreIntent v2 for all tool dispatch." }
+    ],
+    "user_id": "rmng-os",
+    "agent_id": "research-curator"
+  },
+  "metadata": {
+    "agent_id": "research-curator",
+    "reason": "memory add smoke test"
+  }
+}

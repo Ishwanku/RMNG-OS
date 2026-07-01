@@ -1,0 +1,13 @@
+{
+  "schema_version": "2",
+  "action": "mcp.proxy",
+  "server": "mem0",
+  "tool": "get_memory",
+  "params": {
+    "memory_id": "REPLACE_WITH_ID_FROM_SEARCH"
+  },
+  "metadata": {
+    "agent_id": "research-curator",
+    "reason": "memory get smoke test"
+  }
+}

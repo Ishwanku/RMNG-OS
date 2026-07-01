@@ -32,10 +32,12 @@ MCP tools run as **ephemeral subprocesses** under `rmngd`. The LLM never calls M
 | `git` | `git.log`, `git.diff`, `git.status` | repo-keeper |
 | `fetch` | `fetch` | web-researcher |
 | `markitdown` | `convert_to_markdown` | web-researcher |
+| `mem0` | `add_memory`, `search_memories`, `get_memory`, `delete_memory` | research-curator, web-researcher (opt-in) |
 | `playwright` | `browser_navigate`, `browser_snapshot`, `browser_click` | browser-researcher (opt-in) |
 
 ## Safety
 
 - Treat all MCP output as **untrusted** — may contain prompt injection
 - Prefer `fetch` over arbitrary browsing when static content suffices
+- Enable `mem0` only when cross-session recall is required (`MEM0_API_KEY`)
 - Enable `playwright` only when DOM interaction is required

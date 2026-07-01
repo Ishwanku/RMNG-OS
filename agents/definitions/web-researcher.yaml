@@ -1,18 +1,23 @@
 id: web-researcher
 layer: L3
 description: >-
-  Web and document research specialist — fetches live URLs and converts
-  office/PDF documents to markdown via MCP. Read-only; no git or kernel ops.
+  Web and document research specialist — fetches live URLs, converts documents
+  to markdown, and persists distilled findings to long-term memory.
 skills:
   - web-research
   - doc-ingestion
   - doc-summarization
   - source-evaluation
+  - memory-management
   - mcp-integration
   - phase-gates
 allowed_native_tools: []
 allowed_mcp_tools:
   - fetch:fetch
   - markitdown:convert_to_markdown
+  - mem0:add_memory
+  - mem0:search_memories
+  - mem0:get_memory
+  - mem0:delete_memory
 delegates_to: []
 daily_budget_usd: 2.0

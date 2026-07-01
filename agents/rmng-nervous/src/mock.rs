@@ -31,6 +31,36 @@ fn session_metadata(
     Some(meta)
 }
 
+fn mem0_user_id() -> String {
+    std::env::var("MEM0_DEFAULT_USER_ID").unwrap_or_else(|_| "rmng-os".into())
+}
+
+fn mem0_search_intent(query: &str, metadata: Option<Metadata>) -> CoreIntent {
+    CoreIntent::McpProxy {
+        mcp_server: "mem0".into(),
+        mcp_tool: "search_memories".into(),
+        mcp_args: serde_json::json!({
+            "query": query,
+            "user_id": mem0_user_id(),
+            "limit": 5
+        }),
+        metadata,
+    }
+}
+
+fn mem0_add_intent(text: &str, agent_id: &str, metadata: Option<Metadata>) -> CoreIntent {
+    CoreIntent::McpProxy {
+        mcp_server: "mem0".into(),
+        mcp_tool: "add_memory".into(),
+        mcp_args: serde_json::json!({
+            "messages": [{ "role": "user", "content": text }],
+            "user_id": mem0_user_id(),
+            "agent_id": agent_id
+        }),
+        metadata,
+    }
+}
+
 /// Nervous-system stub when `LlmProvider::None` — returns valid v2 `CoreIntent` JSON shapes.
 pub fn mock_core_intent(
     prompt: &str,
@@ -95,6 +125,36 @@ pub fn mock_core_intent(
             };
         }
         if a.id == "research-curator" {
+            if lower.contains("delete memory") {
+                return CoreIntent::McpProxy {
+                    mcp_server: "mem0".into(),
+                    mcp_tool: "delete_memory".into(),
+                    mcp_args: serde_json::json!({
+                        "memory_id": "placeholder-memory-id"
+                    }),
+                    metadata,
+                };
+            }
+            if lower.contains("get memory") && lower.contains("memory_id") {
+                return CoreIntent::McpProxy {
+                    mcp_server: "mem0".into(),
+                    mcp_tool: "get_memory".into(),
+                    mcp_args: serde_json::json!({ "memory_id": "placeholder-memory-id" }),
+                    metadata,
+                };
+            }
+            if lower.contains("remember") || lower.contains("save memory") || lower.contains("add memory") {
+                return mem0_add_intent(prompt, "research-curator", metadata);
+            }
+            if lower.contains("search memory") || lower.contains("recall") || lower.contains("prior memory") {
+                let q = prompt
+                    .split_whitespace()
+                    .skip_while(|w| !w.contains("memory") && !w.eq_ignore_ascii_case("recall"))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let query = if q.is_empty() { prompt } else { q.as_str() };
+                return mem0_search_intent(query, metadata);
+            }
             if lower.contains("get issue") || lower.contains("issue #") {
                 let number = prompt
                     .split_whitespace()
@@ -137,6 +197,12 @@ pub fn mock_core_intent(
             };
         }
         if a.id == "web-researcher" {
+            if lower.contains("remember") || lower.contains("save memory") || lower.contains("add memory") {
+                return mem0_add_intent(prompt, "web-researcher", metadata);
+            }
+            if lower.contains("search memory") || lower.contains("recall") || lower.contains("prior memory") {
+                return mem0_search_intent(prompt, metadata);
+            }
             if lower.contains("pdf")
                 || lower.contains("docx")
                 || lower.contains("convert")
@@ -230,6 +296,17 @@ pub fn mock_core_intent(
             };
         }
         if a.id == "repo-keeper" {
+            if lower.contains("search memory") || lower.contains("recall memory") {
+                return mem0_search_intent(prompt, metadata);
+            }
+            if lower.contains("get memory") {
+                return CoreIntent::McpProxy {
+                    mcp_server: "mem0".into(),
+                    mcp_tool: "get_memory".into(),
+                    mcp_args: serde_json::json!({ "memory_id": "placeholder-memory-id" }),
+                    metadata,
+                };
+            }
             let repo = std::env::var("HOME")
                 .map(|h| format!("{h}/dev/projects/RMNG-OS"))
                 .unwrap_or_else(|_| ".".into());
