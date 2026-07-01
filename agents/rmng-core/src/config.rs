@@ -61,6 +61,41 @@ fn default_timeout_secs() -> u64 {
     120
 }
 
+fn default_auto_continue_max_steps() -> u32 {
+    3
+}
+
+fn default_auto_continue_timeout_secs() -> u64 {
+    600
+}
+
+fn default_auto_continue_failure_policy() -> String {
+    "abort".into()
+}
+
+/// Daemon/CLI auto-continue defaults (Sprint 26).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoContinueConfig {
+    #[serde(default = "default_auto_continue_max_steps")]
+    pub max_steps: u32,
+    /// Wall-clock cap per `orchestration.continue` call (0 = unlimited).
+    #[serde(default = "default_auto_continue_timeout_secs")]
+    pub timeout_secs: u64,
+    /// Default `hop_failure_policy` when orchestrator omits it.
+    #[serde(default = "default_auto_continue_failure_policy")]
+    pub default_failure_policy: String,
+}
+
+impl Default for AutoContinueConfig {
+    fn default() -> Self {
+        Self {
+            max_steps: default_auto_continue_max_steps(),
+            timeout_secs: default_auto_continue_timeout_secs(),
+            default_failure_policy: default_auto_continue_failure_policy(),
+        }
+    }
+}
+
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
@@ -205,6 +240,9 @@ pub struct RmngConfig {
     /// LLM budget caps and enforcement (Sprint 11).
     #[serde(default)]
     pub llm_budget: LlmBudgetConfig,
+    /// Multi-hop auto-continue (Sprint 26).
+    #[serde(default)]
+    pub auto_continue: AutoContinueConfig,
 }
 
 impl RmngConfig {
@@ -381,6 +419,20 @@ model = "gpt-4o"
         let cfg = RmngConfig::default();
         assert_eq!(cfg.llm.llm_provider, LlmProviderKind::None);
         assert!(!cfg.llm_configured());
+    }
+
+    #[test]
+    fn parses_auto_continue_config() {
+        let raw = r#"
+[auto_continue]
+max_steps = 5
+timeout_secs = 120
+default_failure_policy = "skip"
+"#;
+        let cfg: RmngConfig = toml::from_str(raw).unwrap();
+        assert_eq!(cfg.auto_continue.max_steps, 5);
+        assert_eq!(cfg.auto_continue.timeout_secs, 120);
+        assert_eq!(cfg.auto_continue.default_failure_policy, "skip");
     }
 
     struct TestAgent {

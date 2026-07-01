@@ -1257,10 +1257,12 @@ name = "rmngd"
 version = "0.1.0"
 dependencies = [
  "rmng-core",
+ "rmng-nervous",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

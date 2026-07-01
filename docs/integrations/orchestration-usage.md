@@ -50,7 +50,30 @@ Continuation state lives at `orchestration.continuation` (daemon-resumable):
 | `awaiting_continuation` | Set after handoff chain completes — tool dispatch may follow |
 | `history[]` | Last 5 finalized orchestration snapshots |
 
-CLI `--auto-continue` uses `AutoContinueLoop` in `rmng-nervous`; future rmngd workers can call `run_step()` + dispatch without duplicating logic.
+### Daemon auto-continue (Sprint 26)
+
+Send to rmngd Unix socket:
+
+```json
+{"action":"orchestration.continue","session_id":"<sid>"}
+```
+
+After successful tool dispatch, rmngd also triggers continuation when `orchestration.continuation` is active or `awaiting_continuation` is true.
+
+Config (`~/.rmng/config.toml`):
+
+```toml
+[auto_continue]
+max_steps = 3
+timeout_secs = 600
+default_failure_policy = "abort"
+```
+
+Env override: `RMNG_AUTO_CONTINUE_MAX_STEPS` (wins over config `max_steps` when set).
+
+Post-dispatch continuation runs **in the background** so the IPC response stays a normal `HandleResponse` (CLI-compatible). Use explicit `orchestration.continue` to await the full loop result.
+
+CLI `--auto-continue` uses the same `AutoContinueLoop` in `rmng-nervous`; rmngd logs `daemon background auto-continue finished` with `steps` and `status`.
 
 ## Chain error recovery (Sprint 25)
 

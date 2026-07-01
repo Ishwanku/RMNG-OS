@@ -6,6 +6,7 @@ pub mod budget;
 pub mod config;
 pub mod cost_rollup;
 pub mod resource_rollup;
+pub mod daemon_request;
 pub mod dispatch;
 pub mod error;
 pub mod intent;
@@ -42,13 +43,16 @@ pub use budget::{
 };
 pub use config::{
     parse_provider_str, AgentLlmOverride, BudgetEnforceMode, LlmBudgetConfig, LlmConfig,
-    LlmConfigEntry, LlmProfile, LlmProvider, LlmProviderKind, RmngConfig,
+    AutoContinueConfig, LlmConfigEntry, LlmProfile, LlmProvider, LlmProviderKind, RmngConfig,
 };
 pub use cost_rollup::{
     rollup_llm_costs, rollup_recent_days, CostRollupReport, EntityCost, PeriodCost, RankedEntityCost,
 };
 pub use resource_rollup::{
     rollup_mcp_resources, EntityResource, HighResourceCall, RankedEntityResource, ResourceRollupReport,
+};
+pub use daemon_request::{
+    parse_daemon_line, DaemonLine, OrchestrationContinueResponse,
 };
 pub use dispatch::Runtime;
 pub use error::RmngError;

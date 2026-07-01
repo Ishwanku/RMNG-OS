@@ -128,3 +128,17 @@ rmng observe --json | jq '.schema_version, .generated_at, .resource_rollup.total
 
 - [docs/llm-configuration.md](../llm-configuration.md)
 - [ADR-021](../decisions/ADR-021-cost-governance.md)
+
+## Daemon auto-continue (Sprint 26)
+
+rmngd continues multi-hop chains without repeated `rmng ask` when session orchestration state has `awaiting_continuation` or `continuation.enabled`.
+
+```bash
+# Explicit continue (blocks until loop finishes)
+echo '{"action":"orchestration.continue","session_id":"<sid>"}' | nc -U ~/.rmng/rmng.sock
+
+# After tool dispatch with --session, continuation runs in background automatically
+rmng ask --session <sid> --agent swarm-coordinator "run git status"
+```
+
+Tune in `~/.rmng/config.toml` under `[auto_continue]` — see [orchestration-usage.md](./orchestration-usage.md).

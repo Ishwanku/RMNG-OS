@@ -5,13 +5,22 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+name = "rmngd"
+path = "src/lib.rs"
+
 [[bin]]
 name = "rmngd"
 path = "src/main.rs"
 
 [dependencies]
 rmng-core = { path = "../rmng-core" }
+rmng-nervous = { path = "../rmng-nervous" }
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+uuid = { workspace = true }
+rmng-nervous = { path = "../rmng-nervous" }
