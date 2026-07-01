@@ -30,7 +30,7 @@ llm_provider = "none"
 
 # [llm]
 # llm_provider = "grok"
-# model = "grok-2-latest"
+# model = "grok-4.3"
 # api_key_env_var = "XAI_API_KEY"
 
 # [llm]

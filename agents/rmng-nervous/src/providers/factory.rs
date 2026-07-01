@@ -202,11 +202,13 @@ pub async fn health_check_detailed(cfg: &RmngConfig) -> Result<HealthReport, Pro
     let backend = LlmBackend::from_config(&cfg.llm)?;
     match backend {
         Some(b) => {
-            let healthy = b.health().await.unwrap_or(false);
-            let detail = if healthy {
-                "endpoint reachable".into()
-            } else {
-                "health probe failed — check key, model, and endpoint".into()
+            let (healthy, detail) = match b.health().await {
+                Ok(true) => (true, "endpoint reachable".into()),
+                Ok(false) => (false, "health probe returned false".into()),
+                Err(ProviderError::Api { status, message, .. }) => {
+                    (false, format!("API {status}: {message}"))
+                }
+                Err(e) => (false, format!("health probe failed: {e}")),
             };
             Ok(HealthReport {
                 provider_id: b.id().to_string(),

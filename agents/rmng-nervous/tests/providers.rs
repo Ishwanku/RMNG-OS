@@ -22,7 +22,7 @@ fn factory_builds_ollama_without_api_key() {
 fn factory_requires_api_key_for_grok() {
     let cfg = LlmConfig {
         llm_provider: LlmProvider::Grok,
-        model: Some("grok-2-latest".into()),
+        model: Some("grok-4.3".into()),
         api_key: None,
         api_key_env_var: Some("XAI_API_KEY_TEST_MISSING".into()),
         ..Default::default()
@@ -50,7 +50,7 @@ fn factory_builds_openai_with_inline_key() {
 fn defaults_cover_major_providers() {
     assert_eq!(default_endpoint(LlmProvider::Grok).unwrap(), "https://api.x.ai/v1");
     assert_eq!(default_model(LlmProvider::OpenAi), "gpt-4o");
-    assert_eq!(default_model(LlmProvider::Grok), "grok-2-latest");
+    assert_eq!(default_model(LlmProvider::Grok), "grok-4.3");
 }
 
 #[test]

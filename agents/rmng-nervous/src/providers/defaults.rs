@@ -21,7 +21,7 @@ pub fn default_model(provider: LlmProvider) -> &'static str {
     match provider {
         LlmProvider::Ollama => "llama3.2",
         LlmProvider::OpenAi => "gpt-4o",
-        LlmProvider::Grok => "grok-2-latest",
+        LlmProvider::Grok => "grok-4.3",
         LlmProvider::Anthropic => "claude-3-5-sonnet-20241022",
         LlmProvider::Google => "gemini-2.0-flash",
         LlmProvider::Groq => "llama-3.3-70b-versatile",

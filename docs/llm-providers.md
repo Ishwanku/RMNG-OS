@@ -28,7 +28,7 @@ File: `~/.rmng/config.toml`
 ```toml
 [llm]
 llm_provider = "grok"          # see table below
-model = "grok-2-latest"
+model = "grok-4.3"
 api_key_env_var = "XAI_API_KEY" # preferred
 max_retries = 2
 timeout_secs = 120
@@ -41,7 +41,7 @@ timeout_secs = 120
 | `none` | — | mock | — |
 | `ollama` | `http://127.0.0.1:11434` | `llama3.2` | — |
 | `openai` | `https://api.openai.com/v1` | `gpt-4o` | `OPENAI_API_KEY` |
-| `grok` | `https://api.x.ai/v1` | `grok-2-latest` | `XAI_API_KEY` |
+| `grok` | `https://api.x.ai/v1` | `grok-4.3` | `XAI_API_KEY` |
 | `anthropic` | `https://api.anthropic.com` | `claude-3-5-sonnet-20241022` | `ANTHROPIC_API_KEY` |
 | `google` | `https://generativelanguage.googleapis.com` | `gemini-2.0-flash` | `GOOGLE_API_KEY` |
 | `groq` | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | `GROQ_API_KEY` |
@@ -72,7 +72,7 @@ export XAI_API_KEY="xai-..."
 cat >> ~/.rmng/config.toml <<'EOF'
 [llm]
 llm_provider = "grok"
-model = "grok-2-latest"
+model = "grok-4.3"
 api_key_env_var = "XAI_API_KEY"
 EOF
 rmng llm health

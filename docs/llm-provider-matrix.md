@@ -36,7 +36,7 @@ cargo test -p rmng-nervous provider_matrix -- --ignored --nocapture
 ### Grok (xAI)
 
 - OpenAI-compatible `/v1/chat/completions`
-- Default model: `grok-2-latest`
+- Default model: `grok-4.3`
 - JSON mode supported; occasional markdown fences (stripped by parser)
 - 401 = invalid `XAI_API_KEY`
 

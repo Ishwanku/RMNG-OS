@@ -45,7 +45,7 @@ impl ProviderError {
     pub fn api(provider: &str, status: u16, message: &str) -> Self {
         let hint = match status {
             401 => " — invalid or expired API key",
-            403 => " — key valid but access denied (check billing or model access)",
+            403 => " — access denied (add credits/licenses at console.x.ai or check model access)",
             429 => " — rate limited; retry with backoff",
             _ => "",
         };

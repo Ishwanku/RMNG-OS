@@ -78,7 +78,6 @@ impl OpenAiCompatProvider {
     }
 
     pub async fn health(&self) -> Result<bool, ProviderError> {
-        // Lightweight probe: list models or minimal completion
         let url = format!("{}/models", self.base_url.trim_end_matches('/'));
         let resp = self
             .client
@@ -89,12 +88,12 @@ impl OpenAiCompatProvider {
         if resp.status().is_success() {
             return Ok(true);
         }
-        // Some compat endpoints lack /models — try a 1-token completion
-        let probe = self
-            .complete_once("Respond with {}")
-            .await
-            .is_ok();
-        Ok(probe)
+        let status = resp.status().as_u16();
+        let message = resp.text().await.unwrap_or_default();
+        if status == 404 {
+            return self.complete_once("Respond with {}").await.map(|_| true);
+        }
+        Err(ProviderError::api(self.provider_id, status, &message))
     }
 
     pub async fn complete(&self, req: LlmRequest<'_>) -> Result<LlmResponse, ProviderError> {
