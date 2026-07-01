@@ -171,6 +171,7 @@ fn build_tool_result_record_captures_mcp_and_metadata() {
             skill_name: None,
             session_id: Some("sid".into()),
             handoff_from: Some("research-curator".into()),
+            handoff_to: None,
         }),
     };
     let resp = HandleResponse::failure("mcp unavailable");

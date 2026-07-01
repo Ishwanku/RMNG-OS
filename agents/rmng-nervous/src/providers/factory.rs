@@ -3,7 +3,8 @@ use super::defaults::{default_endpoint, default_model, provider_label, resolve_a
 use super::google::GoogleProvider;
 use super::ollama::OllamaProvider;
 use super::openai_compat::OpenAiCompatProvider;
-use super::types::{LlmReasonContext, ProviderError};
+use super::reason::reason_with_retry;
+use super::types::{LlmReasonContext, LlmRequest, LlmResponse, ProviderError};
 use rmng_core::{CoreIntent, LlmConfig, LlmProvider, RmngConfig};
 
 /// Unified LLM backend — dispatches to the correct adapter.
@@ -123,38 +124,120 @@ impl LlmBackend {
         }
     }
 
+    pub async fn complete(&self, req: LlmRequest<'_>) -> Result<LlmResponse, ProviderError> {
+        match self {
+            Self::Ollama(p) => p.complete(req).await,
+            Self::OpenAiCompat(p) => p.complete(req).await,
+            Self::Anthropic(p) => p.complete(req).await,
+            Self::Google(p) => p.complete(req).await,
+        }
+    }
+
     pub async fn reason_core(
         &self,
         assembled: &str,
         ctx: &LlmReasonContext<'_>,
     ) -> Result<CoreIntent, ProviderError> {
-        match self {
-            Self::Ollama(p) => p.reason_core(assembled, ctx).await,
-            Self::OpenAiCompat(p) => p.reason_core(assembled, ctx).await,
-            Self::Anthropic(p) => p.reason_core(assembled, ctx).await,
-            Self::Google(p) => p.reason_core(assembled, ctx).await,
+        reason_with_retry(self, self.id(), assembled, ctx).await
+    }
+}
+
+/// Detailed health probe result for CLI/observe.
+#[derive(Debug, Clone)]
+pub struct HealthReport {
+    pub provider_id: String,
+    pub healthy: bool,
+    pub model: String,
+    pub endpoint: Option<String>,
+    pub api_key_set: bool,
+    pub detail: String,
+}
+
+pub async fn health_check_detailed(cfg: &RmngConfig) -> Result<HealthReport, ProviderError> {
+    let label = provider_label(cfg.llm.llm_provider);
+    let model = cfg
+        .llm
+        .model
+        .clone()
+        .unwrap_or_else(|| default_model(cfg.llm.llm_provider).to_string());
+    let endpoint = cfg
+        .llm
+        .endpoint_url
+        .clone()
+        .or_else(|| default_endpoint(cfg.llm.llm_provider).map(str::to_string));
+    let api_key_set = super::defaults::resolve_api_key(&cfg.llm)
+        .ok()
+        .flatten()
+        .is_some();
+
+    if cfg.llm.is_mock() {
+        return Ok(HealthReport {
+            provider_id: label.to_string(),
+            healthy: true,
+            model,
+            endpoint,
+            api_key_set: false,
+            detail: "mock — no network".into(),
+        });
+    }
+
+    if !api_key_set && cfg.llm.llm_provider != LlmProvider::Ollama {
+        return Ok(HealthReport {
+            provider_id: label.to_string(),
+            healthy: false,
+            model,
+            endpoint,
+            api_key_set: false,
+            detail: format!(
+                "API key missing — export {} or set api_key_env_var in config",
+                cfg.llm
+                    .api_key_env_var
+                    .as_deref()
+                    .or_else(|| super::defaults::default_api_key_env(cfg.llm.llm_provider))
+                    .unwrap_or("RMNG_LLM_API_KEY")
+            ),
+        });
+    }
+
+    let backend = LlmBackend::from_config(&cfg.llm)?;
+    match backend {
+        Some(b) => {
+            let healthy = b.health().await.unwrap_or(false);
+            let detail = if healthy {
+                "endpoint reachable".into()
+            } else {
+                "health probe failed — check key, model, and endpoint".into()
+            };
+            Ok(HealthReport {
+                provider_id: b.id().to_string(),
+                healthy,
+                model,
+                endpoint,
+                api_key_set,
+                detail,
+            })
         }
+        None => Ok(HealthReport {
+            provider_id: label.to_string(),
+            healthy: true,
+            model,
+            endpoint,
+            api_key_set: false,
+            detail: "mock".into(),
+        }),
     }
 }
 
 pub async fn health_check(cfg: &RmngConfig) -> Result<(String, bool, Option<String>), ProviderError> {
-    let label = provider_label(cfg.llm.llm_provider);
-    if cfg.llm.is_mock() {
-        return Ok((label.to_string(), true, Some("mock — no network".into())));
-    }
-    let backend = LlmBackend::from_config(&cfg.llm)?;
-    match backend {
-        Some(b) => {
-            let ok = b.health().await.unwrap_or(false);
-            let detail = if ok {
-                Some(format!("model={}", cfg.llm.model.as_deref().unwrap_or("default")))
-            } else {
-                Some("health probe failed".into())
-            };
-            Ok((b.id().to_string(), ok, detail))
-        }
-        None => Ok((label.to_string(), true, Some("mock".into()))),
-    }
+    let r = health_check_detailed(cfg).await?;
+    Ok((
+        r.provider_id,
+        r.healthy,
+        Some(format!(
+            "{} model={} key_set={}",
+            r.detail, r.model, r.api_key_set
+        )),
+    ))
 }
 
 pub fn list_supported_providers() -> Vec<(&'static str, &'static str, bool)> {

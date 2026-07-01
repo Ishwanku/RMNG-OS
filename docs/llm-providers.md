@@ -1,4 +1,4 @@
-# LLM Providers (Sprint 5)
+# LLM Providers (Sprint 6)
 
 RMNG-OS nervous system uses a **pluggable provider abstraction** in `rmng-nervous/src/providers/`. All providers emit the same v2 `CoreIntent` JSON — the body (`rmngd`) never changes.
 
@@ -43,7 +43,7 @@ timeout_secs = 120
 | `openai` | `https://api.openai.com/v1` | `gpt-4o` | `OPENAI_API_KEY` |
 | `grok` | `https://api.x.ai/v1` | `grok-2-latest` | `XAI_API_KEY` |
 | `anthropic` | `https://api.anthropic.com` | `claude-3-5-sonnet-20241022` | `ANTHROPIC_API_KEY` |
-| `google` | `https://generativelanguage.googleapis.com` | `gemini-1.5-flash` | `GOOGLE_API_KEY` |
+| `google` | `https://generativelanguage.googleapis.com` | `gemini-2.0-flash` | `GOOGLE_API_KEY` |
 | `groq` | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | `GROQ_API_KEY` |
 | `together` | `https://api.together.xyz/v1` | `meta-llama/Llama-3-8b-chat-hf` | `TOGETHER_API_KEY` |
 | `fireworks` | `https://api.fireworks.ai/inference/v1` | (see defaults) | `FIREWORKS_API_KEY` |
@@ -63,10 +63,12 @@ rmng llm health
 rmng ask --agent repo-keeper "check git status" --dry-run
 ```
 
-## Quick start: Grok (xAI)
+## Getting started with Grok (xAI)
+
+Grok uses the **xAI** API (`https://api.x.ai/v1`). Keys start with `xai-` (not `gsk_` — that prefix is **Groq**).
 
 ```bash
-export XAI_API_KEY="your-key"
+export XAI_API_KEY="xai-..."
 cat >> ~/.rmng/config.toml <<'EOF'
 [llm]
 llm_provider = "grok"
@@ -74,8 +76,27 @@ model = "grok-2-latest"
 api_key_env_var = "XAI_API_KEY"
 EOF
 rmng llm health
+rmng llm matrix    # optional: probe all configured env keys
 rmng ask "plan next sprint task" --dry-run
 ```
+
+### Grok quirks (Sprint 6 matrix)
+
+| Area | Behavior |
+|------|----------|
+| JSON mode | `response_format: json_object` — reliable for `tool.execute` / `plan.only` |
+| Tool calling | Native tool APIs unused; RMNG uses JSON intent envelope |
+| Rate limits | 429 retried with backoff (`max_retries` in config) |
+| Invalid key | 401 with hint in error message |
+
+## Groq vs Grok
+
+| Provider | Key prefix | Env var | Endpoint |
+|----------|------------|---------|----------|
+| **Grok** (xAI) | `xai-` | `XAI_API_KEY` | `api.x.ai` |
+| **Groq** | `gsk_` | `GROQ_API_KEY` | `api.groq.com` |
+
+If you have a `gsk_` key, use `llm_provider = "groq"` not `grok`.
 
 ## Quick start: OpenAI
 
@@ -103,11 +124,29 @@ model = "my-local-model"
 api_key_env_var = "RMNG_LLM_API_KEY"
 ```
 
+## Secure API key management
+
+- **Never** commit API keys to `config.toml` or the repo.
+- Prefer `api_key_env_var` pointing at shell env or a secrets manager.
+- Use separate env vars per provider (`XAI_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`).
+- Rotate keys immediately if exposed in chat, logs, or CI output.
+- `rmng llm health` reports `key_set` without printing the key value.
+
+## Sprint 6 reliability features
+
+- **Auto-retry**: invalid JSON from the model triggers one repair prompt; logged as `nervous.llm_retry` in `~/.rmng/logs/audit.jsonl`.
+- **Autonomous handoff**: LLM may set `metadata.handoff_to` (agent id); router auto-handoffs when a session is active.
+- **Rate limits**: 429 responses retry with exponential backoff.
+- **Provider matrix**: `rmng llm matrix` or `./scripts/llm-provider-matrix.sh`.
+
+See also: [llm-provider-matrix.md](./llm-provider-matrix.md).
+
 ## CLI commands
 
 ```bash
 rmng llm list      # all supported providers
-rmng llm health    # probe configured provider
+rmng llm health    # detailed probe of configured provider
+rmng llm matrix    # validate Grok/OpenAI/Groq/Google/Ollama via env keys
 rmng observe       # includes llm health summary
 ```
 

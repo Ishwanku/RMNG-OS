@@ -7,8 +7,8 @@ use rmng_core::{
     SessionStore, socket_path, IntentValidator, IntegrationRegistry,
 };
 use rmng_nervous::{
-    health_check, list_supported_providers, load_skill, load_skill_index, AgentRouter,
-    NervousConnector, RouteOutcome,
+    health_check_detailed, list_supported_providers, load_skill, load_skill_index, run_provider_matrix,
+    AgentRouter, NervousConnector, RouteOutcome,
 };
 
 #[derive(Parser)]
@@ -89,6 +89,8 @@ enum Commands {
 enum LlmCommands {
     /// Check health of the configured LLM provider
     Health,
+    /// Run provider validation matrix (uses env API keys)
+    Matrix,
     /// List all supported LLM providers
     List,
 }
@@ -619,7 +621,7 @@ async fn main() {
         Commands::Status => {
             let cfg = RmngConfig::load();
             let connector = NervousConnector::from_config(cfg);
-            println!("rmng 0.1.0 — Sprint 5 (pluggable LLM providers)");
+            println!("rmng 0.1.0 — Sprint 6 (production LLM reliability)");
             if let Ok(reg) = IntegrationRegistry::load() {
                 println!(
                     "integrations: {} manifests, {} tools",
@@ -654,21 +656,49 @@ async fn main() {
         Commands::Llm { action } => match action {
             LlmCommands::Health => {
                 let connector = NervousConnector::load();
-                match health_check(connector.config()).await {
-                    Ok((id, ok, detail)) => {
-                        let status = if ok { "healthy" } else { "unreachable" };
-                        println!("provider: {id}");
-                        println!("status:   {status}");
-                        if let Some(d) = detail {
-                            println!("detail:   {d}");
+                match health_check_detailed(connector.config()).await {
+                    Ok(r) => {
+                        let status = if r.healthy { "healthy" } else { "unreachable" };
+                        println!("provider:  {}", r.provider_id);
+                        println!("status:    {status}");
+                        println!("model:     {}", r.model);
+                        println!("key_set:   {}", r.api_key_set);
+                        if let Some(ep) = &r.endpoint {
+                            println!("endpoint:  {ep}");
                         }
-                        if ok { 0 } else { 1 }
+                        println!("detail:    {}", r.detail);
+                        if r.healthy { 0 } else { 1 }
                     }
                     Err(e) => {
                         eprintln!("{e}");
                         1
                     }
                 }
+            }
+            LlmCommands::Matrix => {
+                println!("Provider matrix (env keys only — never commit keys to config):");
+                println!();
+                let rows = run_provider_matrix().await;
+                let mut failures = 0u32;
+                for row in &rows {
+                    let health = row
+                        .health_ok
+                        .map(|h| if h { "ok" } else { "FAIL" })
+                        .unwrap_or("skip");
+                    let json = row
+                        .json_ok
+                        .map(|j| if j { "ok" } else { "FAIL" })
+                        .unwrap_or("skip");
+                    let env = row.env_var.as_deref().unwrap_or("-");
+                    println!(
+                        "{:<8} key={:<5} health={:<4} json={:<4} env={env} — {}",
+                        row.provider, row.key_set, health, json, row.detail
+                    );
+                    if row.key_set && (row.health_ok == Some(false) || row.json_ok == Some(false)) {
+                        failures += 1;
+                    }
+                }
+                if failures > 0 { 1 } else { 0 }
             }
             LlmCommands::List => {
                 println!("Supported LLM providers:");

@@ -123,6 +123,21 @@ impl AgentRouter {
         }
         let intent = self.reason_for_route(session_id, &route, prompt).await?;
         route.agent.allows_core_intent(&intent).map_err(RouterError::PolicyDenied)?;
+
+        if let (Some(sid), Some(target)) = (session_id, Self::handoff_target(&intent)) {
+            if target != agent_id {
+                tracing::info!(
+                    session = sid,
+                    from = agent_id,
+                    to = target,
+                    "autonomous handoff from LLM metadata.handoff_to"
+                );
+                return self
+                    .handoff(sid, agent_id, target, prompt, "llm suggested handoff")
+                    .await;
+            }
+        }
+
         if let Some(sid) = session_id {
             self.touch_session(sid, &route.agent, prompt)?;
         }
@@ -237,6 +252,23 @@ impl AgentRouter {
                 format!("mcp {mcp_server}.{mcp_tool}"),
             ),
             CoreIntent::PlanOnly { reasoning: _, .. } => {
+                if let (Some(sid), Some(target)) = (session_id, Self::handoff_target(&plan)) {
+                    tracing::info!(
+                        session = sid,
+                        from = %orchestrator.id,
+                        to = target,
+                        "orchestrator autonomous handoff via metadata.handoff_to"
+                    );
+                    return self
+                        .handoff(
+                            sid,
+                            &orchestrator.id,
+                            target,
+                            prompt,
+                            "llm orchestration handoff",
+                        )
+                        .await;
+                }
                 if let Some(sid) = session_id {
                     self.touch_session(sid, orchestrator, prompt)?;
                 }
@@ -313,6 +345,14 @@ impl AgentRouter {
             .await?)
     }
 
+    fn handoff_target(intent: &CoreIntent) -> Option<&str> {
+        intent
+            .metadata()
+            .and_then(|m| m.handoff_to.as_deref())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    }
+
     /// Attach session/handoff metadata to an intent before rmngd dispatch.
     pub fn enrich_intent_metadata(
         intent: &mut CoreIntent,
@@ -326,6 +366,7 @@ impl AgentRouter {
                 skill_name: None,
                 session_id: None,
                 handoff_from: None,
+                handoff_to: None,
             });
             if let Some(sid) = session_id {
                 m.session_id = Some(sid.to_string());
@@ -405,6 +446,21 @@ mod tests {
             metadata: None,
         };
         assert!(AgentRouter::validate_intent(&agent, &intent).is_ok());
+    }
+
+    #[test]
+    fn handoff_target_reads_metadata() {
+        let intent = CoreIntent::PlanOnly {
+            reasoning: "delegate".into(),
+            metadata: Some(rmng_core::intent::Metadata {
+                trace_id: None,
+                skill_name: None,
+                session_id: Some("sess-1".into()),
+                handoff_from: None,
+                handoff_to: Some("repo-keeper".into()),
+            }),
+        };
+        assert_eq!(AgentRouter::handoff_target(&intent), Some("repo-keeper"));
     }
 
     #[test]

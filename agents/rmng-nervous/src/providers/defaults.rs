@@ -23,7 +23,7 @@ pub fn default_model(provider: LlmProvider) -> &'static str {
         LlmProvider::OpenAi => "gpt-4o",
         LlmProvider::Grok => "grok-2-latest",
         LlmProvider::Anthropic => "claude-3-5-sonnet-20241022",
-        LlmProvider::Google => "gemini-1.5-flash",
+        LlmProvider::Google => "gemini-2.0-flash",
         LlmProvider::Groq => "llama-3.3-70b-versatile",
         LlmProvider::Together => "meta-llama/Llama-3-8b-chat-hf",
         LlmProvider::Fireworks => "accounts/fireworks/models/llama-v3p1-8b-instruct",

@@ -82,7 +82,13 @@ impl GoogleProvider {
     }
 
     pub async fn health(&self) -> Result<bool, ProviderError> {
-        Ok(!self.api_key.is_empty())
+        self.complete_once("Respond with {}").await.map(|_| true).or_else(|e| {
+            if matches!(e, ProviderError::Api { status: 401 | 403, .. }) {
+                Ok(false)
+            } else {
+                Err(e)
+            }
+        })
     }
 
     pub async fn complete(&self, req: LlmRequest<'_>) -> Result<LlmResponse, ProviderError> {
@@ -105,10 +111,9 @@ impl GoogleProvider {
 
     async fn complete_once(&self, prompt: &str) -> Result<LlmResponse, ProviderError> {
         let url = format!(
-            "{}/v1beta/models/{}:generateContent?key={}",
+            "{}/v1beta/models/{}:generateContent",
             self.base_url.trim_end_matches('/'),
-            self.model,
-            self.api_key
+            self.model
         );
         let body = GenerateRequest {
             contents: vec![Content {
@@ -119,15 +124,17 @@ impl GoogleProvider {
                 temperature: 0.0,
             },
         };
-        let resp = self.client.post(&url).json(&body).send().await?;
+        let resp = self
+            .client
+            .post(&url)
+            .header("X-goog-api-key", &self.api_key)
+            .json(&body)
+            .send()
+            .await?;
         let status = resp.status();
         if !status.is_success() {
             let message = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::Api {
-                provider: "google".into(),
-                status: status.as_u16(),
-                message,
-            });
+            return Err(ProviderError::api("google", status.as_u16(), &message));
         }
         let parsed: GenerateResponse = resp.json().await?;
         let content = parsed

@@ -8,7 +8,7 @@ fn audit_track_label(t: AuditTrack) -> String {
     }
 }
 use rmng_core::SessionStore;
-use rmng_nervous::{health_check, load_skill_index, AgentRegistry, NervousConnector};
+use rmng_nervous::{health_check_detailed, load_skill_index, AgentRegistry, NervousConnector};
 use std::io::{BufRead, BufReader};
 
 const AUDIT_TAIL: usize = 8;
@@ -24,10 +24,13 @@ pub async fn print_observe() {
         connector.provider_label(),
         rmng_core::RmngConfig::config_path().display()
     );
-    if let Ok((id, ok, detail)) = health_check(cfg).await {
-        let status = if ok { "healthy" } else { "unreachable" };
-        let extra = detail.map(|d| format!(" — {d}")).unwrap_or_default();
-        println!("llm health:   {id} [{status}]{extra}");
+    if let Ok(r) = health_check_detailed(cfg).await {
+        let status = if r.healthy { "healthy" } else { "unreachable" };
+        let ep = r.endpoint.as_deref().unwrap_or("-");
+        println!(
+            "llm health:   {} [{status}] model={} key_set={} endpoint={ep} — {}",
+            r.provider_id, r.model, r.api_key_set, r.detail
+        );
     }
     println!();
 

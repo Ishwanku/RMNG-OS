@@ -141,11 +141,11 @@ impl OpenAiCompatProvider {
         let status = resp.status();
         if !status.is_success() {
             let message = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::Api {
-                provider: self.provider_id.to_string(),
-                status: status.as_u16(),
-                message,
-            });
+            return Err(ProviderError::api(
+                self.provider_id,
+                status.as_u16(),
+                &message,
+            ));
         }
         let parsed: ChatResponse = resp.json().await?;
         let content = parsed

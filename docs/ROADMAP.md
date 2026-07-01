@@ -146,7 +146,7 @@ Multi-agent routing, layer model, session store, swarm handoffs.
 | **Sprint 4b** | ✅ | Tool result write-back to `shared_context`, multi-hop `--chain` handoffs, `session prune`, collaboration E2E |
 | **Sprint 4c** | ✅ | Live LLM session orchestration prompts, Ollama guidance, MCP `search_issues` E2E, session TTL on load |
 | **Sprint 5** | ✅ | Pluggable LLM providers (Ollama, Grok, OpenAI, Anthropic, Google, OpenAI-compat family) |
-| **Sprint 6** | Planned | Autonomous handoff selection, production hardening, real API key test matrix |
+| **Sprint 6** | ✅ | Autonomous handoff (`metadata.handoff_to`), JSON auto-retry, provider matrix, production hardening |
 
 See [ADR-017](decisions/ADR-017-multi-level-agent-architecture.md).
 

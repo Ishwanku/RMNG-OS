@@ -32,6 +32,11 @@
           "type": "string",
           "minLength": 1,
           "description": "Agent id that delegated this intent (handoff chain)"
+        },
+        "handoff_to": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Suggested next agent for autonomous handoff (orchestration)"
         }
       }
     },

@@ -42,6 +42,25 @@ pub enum ProviderError {
 }
 
 impl ProviderError {
+    pub fn api(provider: &str, status: u16, message: &str) -> Self {
+        let hint = match status {
+            401 => " — invalid or expired API key",
+            403 => " — key valid but access denied (check billing or model access)",
+            429 => " — rate limited; retry with backoff",
+            _ => "",
+        };
+        let trimmed = if message.len() > 240 {
+            format!("{}…", &message[..240])
+        } else {
+            message.to_string()
+        };
+        Self::Api {
+            provider: provider.to_string(),
+            status,
+            message: format!("{trimmed}{hint}"),
+        }
+    }
+
     pub fn is_retryable(&self) -> bool {
         match self {
             Self::Http(e) => e.is_timeout() || e.is_connect() || e.is_request(),

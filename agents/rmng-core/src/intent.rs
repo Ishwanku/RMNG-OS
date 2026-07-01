@@ -20,6 +20,9 @@ pub struct Metadata {
     pub session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub handoff_from: Option<String>,
+    /// Target agent for autonomous handoff (Sprint 6).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handoff_to: Option<String>,
 }
 
 /// Internally tagged poly-intent: native tools, MCP proxy, or plan-only reasoning.
