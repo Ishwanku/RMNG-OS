@@ -26,6 +26,7 @@ pub async fn run_program(program: &str, args: &[&str], cwd: Option<&Path>) -> Re
         output: String::from_utf8_lossy(&output.stdout).to_string()
             + &String::from_utf8_lossy(&output.stderr),
         exit_code: output.status.code(),
+        resources: None,
     })
 }
 

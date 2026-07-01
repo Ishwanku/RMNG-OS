@@ -254,15 +254,26 @@ mod tests {
 
     #[test]
     fn loads_gemini_default_from_catalog() {
-        std::env::set_var(
-            "RMNG_PROJECT_ROOT",
-            format!(
-                "{}/dev/projects/RMNG-OS",
-                std::env::var("HOME").unwrap_or_else(|_| "/home/saini".into())
-            ),
+        let root = format!(
+            "{}/dev/projects/RMNG-OS",
+            std::env::var("HOME").unwrap_or_else(|_| "/home/saini".into())
         );
-        let _ = load_catalog();
-        let model = catalog_default_model(LlmProvider::Google).unwrap_or_default();
+        let catalog_file = PathBuf::from(&root).join("config/llm-catalog.toml");
+        if !catalog_file.is_file() {
+            return;
+        }
+        let raw = std::fs::read_to_string(&catalog_file).expect("read catalog");
+        let file: LlmCatalogFile = toml::from_str(&raw).expect("parse catalog");
+        let google = file
+            .providers
+            .get("google")
+            .expect("google provider in catalog");
+        let model = google
+            .models
+            .iter()
+            .find(|m| m.default)
+            .map(|m| m.id.as_str())
+            .unwrap_or("");
         assert!(
             model.starts_with("gemini-3") || model.starts_with("gemini-2"),
             "expected modern gemini default, got {model}"

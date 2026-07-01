@@ -5,6 +5,7 @@ pub mod audit;
 pub mod budget;
 pub mod config;
 pub mod cost_rollup;
+pub mod resource_rollup;
 pub mod dispatch;
 pub mod error;
 pub mod intent;
@@ -22,7 +23,10 @@ pub use audit::{
     compute_audit_stats, AuditCategory, AuditEntry, AuditLog, AuditStats, AuditTrack,
     ChainVerifyResult, AUDIT_GENESIS_HASH, AUDIT_SCHEMA_VERSION,
 };
-pub use rmng_mcp::{IsolationLimits, IsolationReport, McpCallResult};
+pub use rmng_mcp::{
+    is_high_risk_mcp_server, IsolationLimits, IsolationReport, McpCallResult, ResourceMetrics,
+    PROFILE_BASIC, PROFILE_E2B, PROFILE_PLAYWRIGHT,
+};
 pub use registry::{IntegrationManifest, IntegrationRegistry, ToolManifest};
 pub use session::{
     build_tool_result_record, persist_dispatch_to_session, session_ttl_days, AgentSession,
@@ -40,6 +44,9 @@ pub use config::{
 };
 pub use cost_rollup::{
     rollup_llm_costs, rollup_recent_days, CostRollupReport, EntityCost, PeriodCost, RankedEntityCost,
+};
+pub use resource_rollup::{
+    rollup_mcp_resources, EntityResource, HighResourceCall, RankedEntityResource, ResourceRollupReport,
 };
 pub use dispatch::Runtime;
 pub use error::RmngError;

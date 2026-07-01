@@ -59,6 +59,9 @@ async fn research_curator_validate_output_plan_only() {
                 success: true,
                 exit_code: Some(0),
                 handoff_from: None,
+                peak_rss_kb: None,
+                cpu_time_ms: None,
+                runtime_ms: None,
             },
         )
         .expect("record");

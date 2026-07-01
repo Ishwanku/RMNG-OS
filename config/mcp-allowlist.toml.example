@@ -48,6 +48,7 @@ memory_mb = 256
 pids_max = 32
 cgroup = true
 new_session = true
+# seccomp_profile = "basic"  # optional; off by default for compatibility
 
 # Sprint 13 — document → markdown (Track 2; https/file/data URIs only)
 [servers.markitdown]
@@ -76,6 +77,8 @@ pids_max = 128
 cgroup = true
 new_session = true
 no_new_privs = true
+seccomp_profile = "playwright"
+drop_capabilities = true
 
 # Per-server isolation override (optional — merges over global [isolation] in config.toml)
 # [servers.git.isolation]
@@ -109,3 +112,5 @@ pids_max = 64
 cgroup = true
 new_session = true
 no_new_privs = true
+seccomp_profile = "e2b"
+drop_capabilities = true

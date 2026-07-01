@@ -48,6 +48,9 @@ async fn live_llm_assembled_prompt_includes_session_orchestration_guide() {
                 success: true,
                 exit_code: Some(0),
                 handoff_from: None,
+                peak_rss_kb: None,
+                cpu_time_ms: None,
+                runtime_ms: None,
             },
         )
         .expect("record");
@@ -83,6 +86,9 @@ async fn live_llm_repo_keeper_reasons_with_session_context() {
                 success: true,
                 exit_code: Some(0),
                 handoff_from: None,
+                peak_rss_kb: None,
+                cpu_time_ms: None,
+                runtime_ms: None,
             },
         )
         .expect("record");

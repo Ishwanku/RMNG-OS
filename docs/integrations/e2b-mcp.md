@@ -64,3 +64,8 @@ Set `[servers.e2b] enabled = false` and restart rmngd. Remove `e2b:run_code` fro
 ## Decision
 
 Accepted opt-in Track 2. HTTP gateway deferred.
+
+
+## Security (Sprint 21)
+
+> **High risk** — code runs in E2B cloud, but the local MCP subprocess still needs hardening. Use `seccomp_profile = "e2b"` and `drop_capabilities = true`. See [security-mcp-usage.md](security-mcp-usage.md).

@@ -82,6 +82,10 @@ pub struct AuditEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_pid: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_peak_rss_kb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_cpu_time_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cost_usd: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tokens_prompt: Option<u32>,
@@ -119,6 +123,8 @@ impl AuditEntry {
             duration_ms: None,
             mcp_server: None,
             mcp_pid: None,
+            mcp_peak_rss_kb: None,
+            mcp_cpu_time_ms: None,
             cost_usd: None,
             tokens_prompt: None,
             tokens_completion: None,
@@ -182,6 +188,9 @@ pub struct AuditStats {
     pub handoff_events: u64,
     pub spent_today_usd: f64,
     pub spent_total_usd: f64,
+    pub mcp_peak_rss_kb_max: u64,
+    pub mcp_cpu_time_ms_total: u64,
+    pub mcp_runtime_ms_total: u64,
 }
 
 pub fn compute_audit_stats(entries: &[AuditEntry]) -> AuditStats {
@@ -208,6 +217,15 @@ pub fn compute_audit_stats(entries: &[AuditEntry]) -> AuditStats {
         }
         if e.category == Some(AuditCategory::Mcp) {
             stats.mcp_calls += 1;
+            if let Some(rss) = e.mcp_peak_rss_kb {
+                stats.mcp_peak_rss_kb_max = stats.mcp_peak_rss_kb_max.max(rss);
+            }
+            if let Some(cpu) = e.mcp_cpu_time_ms {
+                stats.mcp_cpu_time_ms_total += cpu;
+            }
+            if let Some(ms) = e.duration_ms {
+                stats.mcp_runtime_ms_total += ms;
+            }
         }
         if e.category == Some(AuditCategory::Circuit) {
             stats.circuit_events += 1;

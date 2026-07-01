@@ -13,19 +13,20 @@ Per-repository evaluation records for open-source AI/agent/MCP projects consider
 | [mcp-fetch.md](mcp-fetch.md) | `@modelcontextprotocol/server-fetch` | 2 — MCP Proxy | **Active** (Sprint 13 E2E) |
 | [mem0-mcp.md](mem0-mcp.md) | `mem0-mcp-server` | 2 — MCP Proxy | **Active** (Sprint 15, opt-in) |
 | [e2b-mcp.md](e2b-mcp.md) | `@e2b/mcp-server` | 2 — MCP Proxy | **Active** (Sprint 17, opt-in) |
+| [playwright-mcp.md](playwright-mcp.md) | `@playwright/mcp` | 2 — MCP Proxy | **Active** (opt-in) |
+| [markitdown-mcp.md](markitdown-mcp.md) | `markitdown-mcp` | 2 — MCP Proxy | **Active** (Sprint 13) |
 | [sandbox-usage.md](sandbox-usage.md) | — | Guide | **Active** (Sprint 17) |
 | [testing-usage.md](testing-usage.md) | — | Guide | **Active** (Sprint 18) |
-| [operations-usage.md](operations-usage.md) | — | Guide | **Active** (Sprint 19) |
+| [operations-usage.md](operations-usage.md) | — | Guide | **Active** (Sprint 19–22) |
+| [security-mcp-usage.md](security-mcp-usage.md) | — | Guide | **Active** (Sprint 21) |
+| [end-to-end-workflow.md](end-to-end-workflow.md) | — | Guide | **Active** (Sprint 22) |
+| [recommended-agent-setups.md](recommended-agent-setups.md) | — | Guide | **Active** (Sprint 22) |
 | [evaluation-usage.md](evaluation-usage.md) | — | Guide | **Active** (Sprint 16) |
 | [promptfoo-patterns.md](promptfoo-patterns.md) | promptfoo | 3 — Skill | **Active** |
 | [memory-usage.md](memory-usage.md) | — | Guide | **Active** |
-| [markitdown-mcp.md](markitdown-mcp.md) | `markitdown-mcp` | 2 — MCP Proxy | **Active** (Sprint 13) |
 | [web-research-usage.md](web-research-usage.md) | — | Guide | **Active** |
 | [browser-research-usage.md](browser-research-usage.md) | — | Guide | **Active** (Sprint 14) |
 | [code-workflow-usage.md](code-workflow-usage.md) | — | Guide | **Active** (Sprint 14) |
-| [browser-research-usage.md](browser-research-usage.md) | — | Guide | **Active** (Sprint 14) |
-| [code-workflow-usage.md](code-workflow-usage.md) | — | Guide | **Active** (Sprint 14) |
-| [playwright-mcp.md](playwright-mcp.md) | `@playwright/mcp` | 2 — MCP Proxy | **Active** (opt-in) |
 | [superpowers-skill.md](superpowers-skill.md) | `obra/superpowers` | 3 — Skill | **Active** (adapted) |
 | [context7-rejected.md](context7-rejected.md) | `upstash/context7` | 4 — Rejected | **Rejected** |
 | _future_ | Use [TEMPLATE.md](TEMPLATE.md) | — | Intake |

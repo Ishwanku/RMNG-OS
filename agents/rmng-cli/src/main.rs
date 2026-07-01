@@ -86,11 +86,11 @@ enum Commands {
     Tools,
     /// Show runtime status
     Status,
-    /// Runtime observability — integrations, agents, audit tail, MCP allowlist
+    /// Runtime observability — LLM health, budgets, circuits, MCP resources, audit tail
     Observe {
-        #[arg(long, help = "LLM cost rollups from audit log (session/agent/daily/weekly)")]
+        #[arg(long, help = "Cost + MCP resource rollups (LLM spend, peak RSS, circuits)")]
         cost: bool,
-        #[arg(long, help = "JSON output (best with --cost)")]
+        #[arg(long, help = "Structured JSON (schema v1): cost_rollup, resource_rollup, budgets, circuits")]
         json: bool,
     },
     /// Tamper-evident audit log tools
@@ -146,11 +146,11 @@ enum LlmCommands {
 
 #[derive(Subcommand)]
 enum AuditCommands {
-    /// Verify audit hash chain integrity (exit 1 if tampered)
+    /// Verify audit hash chain (exit 1 if tampered); --stats adds cost + resource rollups
     Verify {
         #[arg(long, help = "JSON output for CI/cron")]
         json: bool,
-        #[arg(long, help = "Include LLM cost statistics")]
+        #[arg(long, help = "Category stats, LLM cost + MCP resource rollups")]
         stats: bool,
     },
 }
@@ -433,25 +433,33 @@ async fn main() {
                 {
                     Ok(outcome) => {
                         if outcome.is_handoff() {
-                            if let RouteOutcome::Handoff {
-                                from_agent,
-                                to_agent,
-                                from_layer,
-                                to_layer,
-                                reason,
-                                ..
-                            } = &outcome
-                            {
-                                println!(
-                                    "handoff: {from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {reason}"
-                                );
+                            match &outcome {
+                                RouteOutcome::HandoffChain { chain, hops, reason, .. } => {
+                                    println!("handoff-chain ({reason}): {}", chain.join(" → "));
+                                    for hop in hops {
+                                        println!(
+                                            "  hop: {} → {} — {}",
+                                            hop.from_agent, hop.to_agent, hop.reason
+                                        );
+                                    }
+                                }
+                                RouteOutcome::Handoff {
+                                    from_agent,
+                                    to_agent,
+                                    from_layer,
+                                    to_layer,
+                                    reason,
+                                    ..
+                                } => {
+                                    println!(
+                                        "handoff: {from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {reason}"
+                                    );
+                                }
+                                _ => {}
                             }
                         }
                         let mut intent = outcome.intent();
-                        let handoff_from = match &outcome {
-                            RouteOutcome::Handoff { from_agent, .. } => Some(from_agent.as_str()),
-                            _ => None,
-                        };
+                        let handoff_from = outcome.handoff_from_agent();
                         if let Some(ref sid) = session {
                             AgentRouter::enrich_intent_metadata(
                                 &mut intent,
@@ -533,24 +541,32 @@ async fn main() {
             };
             match handoff_result {
                 Ok(outcome) => {
-                    if let RouteOutcome::Handoff {
-                        from_agent,
-                        to_agent,
-                        from_layer,
-                        to_layer,
-                        reason,
-                        ..
-                    } = &outcome
-                    {
-                        println!(
-                            "handoff: {from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {reason}"
-                        );
+                    match &outcome {
+                        RouteOutcome::HandoffChain { chain, hops, reason, .. } => {
+                            println!("handoff-chain ({reason}): {}", chain.join(" → "));
+                            for hop in hops {
+                                println!(
+                                    "  hop: {} → {} — {}",
+                                    hop.from_agent, hop.to_agent, hop.reason
+                                );
+                            }
+                        }
+                        RouteOutcome::Handoff {
+                            from_agent,
+                            to_agent,
+                            from_layer,
+                            to_layer,
+                            reason,
+                            ..
+                        } => {
+                            println!(
+                                "handoff: {from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {reason}"
+                            );
+                        }
+                        _ => {}
                     }
                     let mut intent = outcome.intent();
-                    let handoff_from = match &outcome {
-                        RouteOutcome::Handoff { from_agent, .. } => Some(from_agent.as_str()),
-                        _ => None,
-                    };
+                    let handoff_from = outcome.handoff_from_agent();
                     AgentRouter::enrich_intent_metadata(
                         &mut intent,
                         Some(session.as_str()),
@@ -713,7 +729,7 @@ async fn main() {
         Commands::Status => {
             let cfg = RmngConfig::load();
             let connector = NervousConnector::from_config(cfg);
-            println!("rmng 0.1.0 — Sprint 6 (production LLM reliability)");
+            println!("rmng 0.1.0 — Sprints 19–22 (ops, resources, security hardening)");
             if let Ok(reg) = IntegrationRegistry::load() {
                 println!(
                     "integrations: {} manifests, {} tools",

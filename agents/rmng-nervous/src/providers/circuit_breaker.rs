@@ -261,6 +261,9 @@ mod tests {
     use super::*;
     use std::env;
 
+    /// Circuit breaker tests share HOME and on-disk state; serialize them.
+    static TEST_ISOLATION: Mutex<()> = Mutex::new(());
+
     fn reset(home: &PathBuf) {
         env::set_var("HOME", home.to_str().unwrap());
         *BREAKERS.lock().unwrap() = None;
@@ -272,6 +275,7 @@ mod tests {
 
     #[test]
     fn opens_after_rate_limit_failure() {
+        let _guard = TEST_ISOLATION.lock().unwrap();
         let dir = env::temp_dir().join(format!("rmng-cb-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         reset(&dir);
@@ -286,6 +290,7 @@ mod tests {
 
     #[test]
     fn persists_across_reload_from_disk() {
+        let _guard = TEST_ISOLATION.lock().unwrap();
         let dir = env::temp_dir().join(format!("rmng-cb-persist-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         reset(&dir);
@@ -300,6 +305,7 @@ mod tests {
 
     #[test]
     fn reloads_when_file_mtime_changes() {
+        let _guard = TEST_ISOLATION.lock().unwrap();
         let dir = env::temp_dir().join(format!("rmng-cb-mtime-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         reset(&dir);

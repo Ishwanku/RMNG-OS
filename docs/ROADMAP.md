@@ -114,7 +114,21 @@ Goal: Implement Rust runtime with nervous-system / body separation. See [VISION.
 | Permission gate + audit log | ✅ Gate + `~/.rmng/logs/audit.jsonl` |
 | `gh auth login` in WSL | Git push from Ubuntu |
 
-## Phase 6 — Skills, MCP & Integrations (PLANNED)
+## Phase 6 — Skills, MCP & Integrations ✅ ACTIVE
+### Agent integration sprints (Sprints 17–22) ✅
+
+| Sprint | Deliverable |
+|--------|-------------|
+| 17 | E2B `run_code` MCP (opt-in) |
+| 18 | Testing skills + workflow E2E |
+| 19 | Persistent circuit breaker, budget governance |
+| 20 | Per-process MCP resource metrics |
+| 21 | Seccomp profiles + cap drop for high-risk MCP |
+| 22 | Docs polish, test coverage, observe schema v1 |
+
+Docs: `docs/integrations/end-to-end-workflow.md`, `recommended-agent-setups.md`
+
+
 
 **Plan:** [PLAN-AGENTS-MCP-SKILLS.md](PLAN-AGENTS-MCP-SKILLS.md) · **ADR:** [ADR-014](DECISIONS.md)
 
@@ -195,3 +209,22 @@ code ~/dev/projects/RMNG-OS
 | **2** | Slim config builds, ccache rebuild < 5 min, daily scripts work |
 | **3** | Custom patch applies cleanly and rebuilds | ✅ |
 | **4** | Optional advanced goal achieved |
+### Sprint 21 — Security Hardening & Subprocess Isolation ✅
+- Seccomp profiles (`basic`, `playwright`, `e2b`) per MCP server
+- Capability dropping in pre_exec; audit logging for high-risk tools
+- Tighter config examples; [security-mcp-usage.md](integrations/security-mcp-usage.md)
+### Sprint 20 — Resource Metrics & Observability ✅
+- Per-subprocess peak RSS + CPU via `wait4` in `rmng-mcp`
+- `resource_rollup` in `rmng observe` (text + JSON)
+- Audit/session fields: `mcp_peak_rss_kb`, `mcp_cpu_time_ms`
+
+### Sprint 22 — Consolidation & Polish ✅
+- [end-to-end-workflow.md](integrations/end-to-end-workflow.md), [recommended-agent-setups.md](integrations/recommended-agent-setups.md)
+- Integration tests: resource metrics (real subprocess), security isolation E2E, Mem0 deny gate
+- `rmng observe --json` schema v1 (`schema_version`, `generated_at`, `resource_rollup`)
+- Integrations index cleanup
+### Sprint 23 — Multi-hop Orchestration & Autonomous Behavior ✅
+- `handoff_chain` + `handoff_return_to` in `plan.only` metadata; router executes full chains
+- Upward return to L4 orchestrator (feedback loop) with session tool-result summary
+- `shared_context.orchestration` tracks chain progress; audit events per hop
+- E2E: autonomous chain, return-to-orchestrator, chain state in prompt context

@@ -260,6 +260,22 @@ impl AgentDefinition {
         }
         Ok(())
     }
+
+    /// Upward return to orchestrator (Sprint 23 feedback loop) — bypasses downward-only rule.
+    pub fn validate_handoff_return_to(&self, target: &AgentDefinition) -> Result<(), AgentError> {
+        if target.layer != AgentLayer::L4 {
+            return Err(AgentError::HandoffDenied(format!(
+                "handoff_return_to must target L4 orchestrator, got {} ({})",
+                target.id, target.layer
+            )));
+        }
+        if self.layer == AgentLayer::L4 {
+            return Err(AgentError::HandoffDenied(
+                "orchestrator cannot use handoff_return_to to another orchestrator".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 fn pattern_matches_any(value: &str, patterns: &[String]) -> bool {

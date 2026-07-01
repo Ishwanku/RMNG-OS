@@ -19,11 +19,13 @@ You are operating inside a persistent RMNG session. The Session context block co
 Decision rules:
 1. **Continue** — if more work is needed within your allowed tools, emit `tool.execute` or `mcp.proxy`.
 2. **Complete** — if prior results satisfy the request, emit `plan.only` with a concise summary.
-3. **Delegate** — set `metadata.handoff_to` to the target agent id (e.g. `repo-keeper`, `kernel-engineer`) and emit `plan.only` with a brief delegation reason. The router auto-handoffs when a session is active.
-4. **Delegate via tool (L4 fallback)** — emit `tool.execute` for the target tool; the router hands off to the right L3/L2 agent.
+3. **Delegate (single hop)** — set `metadata.handoff_to` and emit `plan.only` with a brief delegation reason.
+4. **Delegate (multi-hop)** — set `metadata.handoff_chain` to an ordered agent list (e.g. `["swarm-coordinator","repo-keeper","runtime-executor"]`). Include yourself as the first id when you are the orchestrator. Optional `metadata.chain_id` correlates the workflow in session context.
+5. **Return to orchestrator** — when your specialist work is done, emit `plan.only` with `metadata.handoff_return_to` set to the orchestrator agent id (e.g. `swarm-coordinator`) and a concise summary referencing `recent_tool_results`.
+6. **Delegate via tool (L4 fallback)** — emit `tool.execute` for the target tool; the router hands off to the right L3/L2 agent.
 
 Always include `metadata.session_id` matching the session when a session is active.
-Set `metadata.handoff_to` only when another agent should take over (must be a valid agent id from the registry).
+Prefer `handoff_chain` when the task clearly needs multiple specialists in sequence; use `handoff_to` for a single delegation.
 Never repeat a tool call if `recent_tool_results` already contains a successful result for the same tool unless the user explicitly asks to re-run."#;
 
 /// Lightweight skill entry for progressive disclosure (index only).

@@ -26,6 +26,12 @@ pub struct Metadata {
     /// Multi-hop handoff chain — router executes each hop in order (Sprint 7).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub handoff_chain: Option<Vec<String>>,
+    /// Return control to orchestrator after specialist work (Sprint 23).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handoff_return_to: Option<String>,
+    /// Correlation id for a multi-hop workflow (Sprint 23).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_id: Option<String>,
 }
 
 /// Internally tagged poly-intent: native tools, MCP proxy, or plan-only reasoning.

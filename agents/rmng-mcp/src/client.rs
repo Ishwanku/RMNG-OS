@@ -1,4 +1,5 @@
 use crate::isolation::{attach_pid, build_report, configure_command, prepare_cgroup, IsolationLimits, IsolationReport};
+use crate::metrics::{harvest_child_resources, ResourceMetrics};
 use crate::McpError;
 use serde_json::{json, Value};
 use std::process::Stdio;
@@ -25,12 +26,13 @@ pub fn wire_tool_name(allowlist_name: &str) -> String {
     allowlist_name.replace('.', "_")
 }
 
-/// Result of an isolated MCP subprocess call (Sprint 10).
+/// Result of an isolated MCP subprocess call (Sprint 10 + Sprint 20 resources).
 #[derive(Debug, Clone)]
 pub struct McpCallResult {
     pub output: String,
     pub pid: Option<u32>,
     pub duration_ms: u64,
+    pub resources: ResourceMetrics,
     pub isolation: IsolationReport,
 }
 
@@ -108,17 +110,17 @@ pub async fn call_tool_isolated(
     )
     .await;
 
-    let output = match call_result {
+    let (output, mut resources) = match call_result {
         Ok(Ok(output)) => {
-            cleanup_child(&mut child).await;
-            output
+            let resources = cleanup_child(&mut child).await;
+            (output, resources)
         }
         Ok(Err(e)) => {
-            cleanup_child(&mut child).await;
+            let _ = cleanup_child(&mut child).await;
             return Err(e);
         }
         Err(_) => {
-            cleanup_child(&mut child).await;
+            let _ = cleanup_child(&mut child).await;
             return Err(McpError::Timeout(format!(
                 "mcp call {tool_name} exceeded {}s",
                 call_timeout().as_secs()
@@ -127,6 +129,8 @@ pub async fn call_tool_isolated(
     };
 
     let duration_ms = started.elapsed().as_millis() as u64;
+    resources = resources.with_runtime(duration_ms);
+
     let mut warnings = cgroup_warnings;
     if limits.is_active() && cgroup_path.is_none() && limits.cgroup {
         warnings.push("cgroup limits not applied".into());
@@ -136,13 +140,23 @@ pub async fn call_tool_isolated(
         output,
         pid,
         duration_ms,
+        resources,
         isolation: build_report(&limits, cgroup_path, warnings),
     })
 }
 
-async fn cleanup_child(child: &mut Child) {
+async fn cleanup_child(child: &mut Child) -> ResourceMetrics {
+    let pid = child.id();
     let _ = child.kill().await;
+    #[cfg(unix)]
+    {
+        if let Some(pid) = pid {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            return harvest_child_resources(pid);
+        }
+    }
     let _ = timeout(KILL_WAIT_TIMEOUT, child.wait()).await;
+    ResourceMetrics::default()
 }
 
 async fn session_call(

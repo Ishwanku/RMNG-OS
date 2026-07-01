@@ -45,6 +45,7 @@ async fn run_script(script: PathBuf, args: &[&str]) -> Result<ToolResult, RmngEr
         output: String::from_utf8_lossy(&output.stdout).to_string()
             + &String::from_utf8_lossy(&output.stderr),
         exit_code: output.status.code(),
+        resources: None,
     })
 }
 

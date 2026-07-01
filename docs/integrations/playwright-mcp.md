@@ -55,3 +55,7 @@ Exposes Playwright accessibility tree over MCP — DOM-first navigation without 
 ## Decision
 
 - [x] Accepted with **opt-in enable** — separate `browser-researcher` agent, not `web-researcher`
+
+## Security (Sprint 21)
+
+> **High risk** — enable only with `[servers.playwright.isolation]` `seccomp_profile = "playwright"` and `drop_capabilities = true`. See [security-mcp-usage.md](security-mcp-usage.md).

@@ -82,6 +82,12 @@ pub struct ToolResultRecord {
     pub exit_code: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub handoff_from: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peak_rss_kb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_time_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -233,6 +239,26 @@ impl SessionStore {
                 activated_at: Utc::now(),
             },
         );
+        session.updated_at = Utc::now();
+        self.save(session)
+    }
+
+
+    /// Persist multi-hop orchestration progress in `shared_context.orchestration` (Sprint 23).
+    pub fn set_orchestration_state(
+        &self,
+        session: &mut AgentSession,
+        state: serde_json::Value,
+    ) -> Result<(), SessionError> {
+        session
+            .shared_context
+            .insert("orchestration".to_string(), state);
+        session.updated_at = Utc::now();
+        self.save(session)
+    }
+
+    pub fn clear_orchestration_state(&self, session: &mut AgentSession) -> Result<(), SessionError> {
+        session.shared_context.remove("orchestration");
         session.updated_at = Utc::now();
         self.save(session)
     }
@@ -414,6 +440,12 @@ impl AgentSession {
             let ctx = serde_json::to_string_pretty(&other_ctx).unwrap_or_else(|_| "{}".into());
             parts.push(format!("shared_context:\n{ctx}"));
         }
+        if let Some(orch) = self.shared_context.get("orchestration") {
+            parts.push(format!(
+                "orchestration_chain: {}",
+                serde_json::to_string(orch).unwrap_or_else(|_| "{}".into())
+            ));
+        }
         if !self.handoff_history.is_empty() {
             let tail: Vec<_> = self.handoff_history.iter().rev().take(5).collect();
             let lines: Vec<String> = tail
@@ -488,19 +520,29 @@ pub fn build_tool_result_record(
     let handoff_from = intent
         .metadata()
         .and_then(|m| m.handoff_from.clone());
-    let (output, success, exit_code) = if let Some(result) = &resp.tool_result {
+    let (output, success, exit_code, peak_rss_kb, cpu_time_ms, runtime_ms) = if let Some(result) = &resp.tool_result {
         let mut out = result.output.clone();
         if out.len() > MAX_TOOL_OUTPUT_LEN {
             out.truncate(MAX_TOOL_OUTPUT_LEN);
             out.push_str("\n...(truncated)");
         }
-        (out, resp.ok && result.success, result.exit_code)
+        (
+            out,
+            resp.ok && result.success,
+            result.exit_code,
+            result.resources.as_ref().and_then(|r| r.peak_rss_kb),
+            result.resources.as_ref().and_then(|r| r.cpu_time_ms),
+            result.resources.as_ref().and_then(|r| r.runtime_ms),
+        )
     } else if resp.ok {
         (
             resp.action
                 .clone()
                 .unwrap_or_else(|| "ok".into()),
             true,
+            None,
+            None,
+            None,
             None,
         )
     } else {
@@ -509,6 +551,9 @@ pub fn build_tool_result_record(
                 .clone()
                 .unwrap_or_else(|| "unknown error".into()),
             false,
+            None,
+            None,
+            None,
             None,
         )
     };
@@ -520,6 +565,9 @@ pub fn build_tool_result_record(
         success,
         exit_code,
         handoff_from,
+        peak_rss_kb,
+        cpu_time_ms,
+        runtime_ms,
     })
 }
 
@@ -557,6 +605,7 @@ mod tests {
                 success: true,
                 output: "branch main".into(),
                 exit_code: Some(0),
+                resources: None,
             }),
         );
         persist_dispatch_to_session(&store, &session.id, &intent, &resp).expect("persist");
@@ -617,6 +666,9 @@ mod tests {
                     success: true,
                     exit_code: Some(0),
                     handoff_from: None,
+                    peak_rss_kb: None,
+                    cpu_time_ms: None,
+                    runtime_ms: None,
                 },
             )
             .expect("record");

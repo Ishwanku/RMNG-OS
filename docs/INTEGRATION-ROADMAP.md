@@ -7,6 +7,19 @@ Shift from internal hardening to **controlled external integration** — multipl
 
 ---
 
+
+## Sprint status (Sprints 17–22)
+
+| Sprint | Focus | Status |
+|--------|-------|--------|
+| 17 | E2B sandbox MCP | ✅ |
+| 18 | Testing & validation workflows | ✅ |
+| 19 | Production hardening (circuits, budgets) | ✅ |
+| 20 | Resource metrics & observability | ✅ |
+| 21 | Seccomp + capability dropping | ✅ |
+| 22 | Consolidation & polish | ✅ |
+| 23 | Multi-hop orchestration | ✅ |
+
 ## Executive Summary
 
 The GitHub Repos analysis (130+ entries) clusters into:
@@ -170,3 +183,23 @@ See [integrations/README.md](integrations/README.md) for per-repo intake records
 | Audit verify stats | CLI | CI-friendly --stats/--json | ✅ Complete |
 | Per-profile budgets | Core | profile-scoped spend + governance report | ✅ Complete |
 | Operations docs | — | operations-usage.md | ✅ Complete |
+
+### Sprint 21 — Security Hardening & Subprocess Isolation ✅
+- Seccomp profiles (`basic`, `playwright`, `e2b`) per MCP server
+- Capability dropping in pre_exec; audit logging for high-risk tools
+- Tighter config examples; [security-mcp-usage.md](integrations/security-mcp-usage.md)
+### Sprint 20 — Resource Metrics & Observability ✅
+- Per-subprocess peak RSS + CPU via `wait4` in `rmng-mcp`
+- `resource_rollup` in `rmng observe` (text + JSON)
+- Audit/session fields: `mcp_peak_rss_kb`, `mcp_cpu_time_ms`
+
+### Sprint 22 — Consolidation & Polish ✅
+- [end-to-end-workflow.md](integrations/end-to-end-workflow.md), [recommended-agent-setups.md](integrations/recommended-agent-setups.md)
+- Integration tests: resource metrics (real subprocess), security isolation E2E, Mem0 deny gate
+- `rmng observe --json` schema v1 (`schema_version`, `generated_at`, `resource_rollup`)
+- Integrations index cleanup
+### Sprint 23 — Multi-hop Orchestration & Autonomous Behavior ✅
+- `handoff_chain` + `handoff_return_to` in `plan.only` metadata; router executes full chains
+- Upward return to L4 orchestrator (feedback loop) with session tool-result summary
+- `shared_context.orchestration` tracks chain progress; audit events per hop
+- E2E: autonomous chain, return-to-orchestrator, chain state in prompt context

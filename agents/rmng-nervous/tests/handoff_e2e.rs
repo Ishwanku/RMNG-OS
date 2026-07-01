@@ -106,6 +106,7 @@ async fn tool_result_written_to_shared_context_after_dispatch() {
             success: true,
             output: "On branch main".into(),
             exit_code: Some(0),
+            resources: None,
         }),
     );
     persist_dispatch_to_session(&store, &session.id, &intent, &resp).expect("persist");
@@ -155,10 +156,14 @@ async fn multi_hop_handoff_chain_records_full_history() {
         .await
         .expect("chain");
 
-    if let RouteOutcome::Handoff { to_agent, .. } = &outcome {
-        assert_eq!(to_agent, "runtime-executor");
-    } else {
-        panic!("expected final handoff outcome");
+    match &outcome {
+        RouteOutcome::HandoffChain { chain, .. } => {
+            assert_eq!(chain.last().map(String::as_str), Some("runtime-executor"));
+        }
+        RouteOutcome::Handoff { to_agent, .. } => {
+            assert_eq!(to_agent, "runtime-executor");
+        }
+        _ => panic!("expected chain or handoff outcome"),
     }
 
     let loaded = router.sessions().load(&session.id).expect("load");
@@ -182,6 +187,8 @@ fn build_tool_result_record_captures_mcp_and_metadata() {
             handoff_from: Some("research-curator".into()),
             handoff_to: None,
             handoff_chain: None,
+            handoff_return_to: None,
+            chain_id: None,
         }),
     };
     let resp = HandleResponse::failure("mcp unavailable");
@@ -254,3 +261,118 @@ fn tail_lines(path: &std::path::Path, n: usize) -> Vec<String> {
     let lines: Vec<String> = BufReader::new(file).lines().filter_map(|l| l.ok()).collect();
     lines.into_iter().rev().take(n).collect()
 }
+
+#[tokio::test]
+async fn autonomous_plan_only_handoff_chain_from_orchestrator() {
+    let dir = std::env::temp_dir().join(format!("rmng-auto-chain-{}", uuid::Uuid::new_v4()));
+    let store = SessionStore::new(&dir);
+    let session = store.create().expect("create");
+    let router = test_router(store);
+
+    let outcome = router
+        .ask_routed(
+            Some(&session.id),
+            "swarm-coordinator",
+            "delegate chain for git hygiene",
+        )
+        .await
+        .expect("autonomous chain");
+
+    assert!(outcome.is_handoff());
+    if let RouteOutcome::HandoffChain { chain, hops, .. } = &outcome {
+        assert_eq!(chain.len(), 3);
+        assert_eq!(hops.len(), 2);
+        assert_eq!(chain.last().map(String::as_str), Some("runtime-executor"));
+    } else {
+        panic!("expected HandoffChain outcome, got {outcome:?}");
+    }
+
+    let loaded = router.sessions().load(&session.id).expect("load");
+    assert_eq!(loaded.handoff_history.len(), 2);
+    let orch = loaded
+        .shared_context
+        .get("orchestration")
+        .and_then(|v| v.get("status"))
+        .and_then(|v| v.as_str());
+    assert_eq!(orch, Some("completed"));
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn handoff_return_to_returns_control_to_orchestrator() {
+    let dir = std::env::temp_dir().join(format!("rmng-return-{}", uuid::Uuid::new_v4()));
+    let store = SessionStore::new(&dir);
+    let mut session = store.create().expect("create");
+    store
+        .record_tool_result(
+            &mut session,
+            rmng_core::ToolResultRecord {
+                timestamp: chrono::Utc::now(),
+                tool: "git.status".into(),
+                parameters: serde_json::json!({}),
+                output: "clean working tree".into(),
+                success: true,
+                exit_code: Some(0),
+                handoff_from: Some("repo-keeper".into()),
+                peak_rss_kb: None,
+                cpu_time_ms: None,
+                runtime_ms: None,
+            },
+        )
+        .expect("tool result");
+    let router = test_router(store);
+
+    let outcome = router
+        .ask_routed(
+            Some(&session.id),
+            "repo-keeper",
+            "report back to orchestrator with summary",
+        )
+        .await
+        .expect("return handoff");
+
+    if let RouteOutcome::Handoff { to_agent, .. } = &outcome {
+        assert_eq!(to_agent, "swarm-coordinator");
+    } else {
+        panic!("expected return handoff to orchestrator");
+    }
+
+    let loaded = router.sessions().load(&session.id).expect("load");
+    assert!(
+        loaded.handoff_history.iter().any(|h| h.to_agent == "swarm-coordinator"),
+        "should record return hop"
+    );
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn chain_state_visible_in_prompt_context() {
+    let dir = std::env::temp_dir().join(format!("rmng-ctx-chain-{}", uuid::Uuid::new_v4()));
+    let store = SessionStore::new(&dir);
+    let session = store.create().expect("create");
+    let router = test_router(store.clone());
+
+    router
+        .handoff_chain(
+            &session.id,
+            &[
+                "swarm-coordinator".into(),
+                "repo-keeper".into(),
+                "runtime-executor".into(),
+            ],
+            "workflow task",
+            "context test",
+        )
+        .await
+        .expect("chain");
+
+    let loaded = store.load(&session.id).expect("load");
+    let ctx = loaded.prompt_context();
+    assert!(ctx.contains("orchestration_chain"));
+    assert!(ctx.contains("completed"));
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+

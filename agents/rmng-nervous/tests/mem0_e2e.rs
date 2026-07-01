@@ -232,3 +232,31 @@ fn repo_keeper_agent_policy_allows_mem0_read_only() {
     };
     assert!(agent.allows_core_intent(&add).is_err());
 }
+
+#[test]
+fn mem0_delete_memory_denied_by_gate_when_only_search_allowlisted() {
+    use rmng_core::allowlist::{McpAllowlist, McpServerConfig};
+    use rmng_core::registry::IntegrationRegistry;
+    use std::collections::HashMap;
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../integrations");
+    let registry = IntegrationRegistry::load_from(root).expect("integrations");
+    let mut servers = HashMap::new();
+    servers.insert(
+        "mem0".into(),
+        McpServerConfig {
+            enabled: true,
+            command: "uvx".into(),
+            args: vec!["mem0-mcp-server".into()],
+            allowed_tools: vec!["search_memories".into()],
+            isolation: None,
+        },
+    );
+    let gate = PermissionGate::from_registry(&registry).with_mcp_allowlist(McpAllowlist { servers });
+    let intent = CoreIntent::McpProxy {
+        mcp_server: "mem0".into(),
+        mcp_tool: "delete_memory".into(),
+        mcp_args: serde_json::json!({"memory_id": "x"}),
+        metadata: None,
+    };
+    assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Deny(_)));
+}

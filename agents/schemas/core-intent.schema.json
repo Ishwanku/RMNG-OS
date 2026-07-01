@@ -2,11 +2,17 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://rmng-os.local/schemas/core-intent/v2",
   "title": "RMNG Core Intent",
-  "description": "Versioned poly-intent envelope for the nervous-system → body IPC boundary. Separates native tool execution from MCP proxy requests and plan-only reasoning.",
+  "description": "Versioned poly-intent envelope for the nervous-system \u2192 body IPC boundary. Separates native tool execution from MCP proxy requests and plan-only reasoning.",
   "oneOf": [
-    { "$ref": "#/definitions/toolExecute" },
-    { "$ref": "#/definitions/mcpProxy" },
-    { "$ref": "#/definitions/planOnly" }
+    {
+      "$ref": "#/definitions/toolExecute"
+    },
+    {
+      "$ref": "#/definitions/mcpProxy"
+    },
+    {
+      "$ref": "#/definitions/planOnly"
+    }
   ],
   "definitions": {
     "metadata": {
@@ -45,7 +51,17 @@
             "type": "string",
             "minLength": 1
           },
-          "description": "Ordered multi-hop handoff chain (e.g. swarm-coordinator → repo-keeper → runtime-executor)"
+          "description": "Ordered multi-hop handoff chain (e.g. swarm-coordinator \u2192 repo-keeper \u2192 runtime-executor)"
+        },
+        "handoff_return_to": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Return control to orchestrator after specialist completes (plan.only)"
+        },
+        "chain_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Correlation id for multi-hop orchestration workflows"
         }
       }
     },
@@ -56,10 +72,18 @@
       "patternProperties": {
         "^[a-z][a-z0-9_.-]*$": {
           "oneOf": [
-            { "type": "string" },
-            { "type": "number" },
-            { "type": "boolean" },
-            { "type": "null" }
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       }
@@ -67,7 +91,11 @@
     "toolExecute": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["action", "target", "parameters"],
+      "required": [
+        "action",
+        "target",
+        "parameters"
+      ],
       "properties": {
         "action": {
           "type": "string",
@@ -90,7 +118,12 @@
     "mcpProxy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["action", "mcp_server", "mcp_tool", "mcp_args"],
+      "required": [
+        "action",
+        "mcp_server",
+        "mcp_tool",
+        "mcp_args"
+      ],
       "properties": {
         "action": {
           "type": "string",
@@ -119,7 +152,10 @@
     "planOnly": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["action", "reasoning"],
+      "required": [
+        "action",
+        "reasoning"
+      ],
       "properties": {
         "action": {
           "type": "string",

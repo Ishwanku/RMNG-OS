@@ -8,6 +8,8 @@ fn skill_metadata(skill_name: Option<&str>) -> Option<Metadata> {
         handoff_from: None,
         handoff_to: None,
         handoff_chain: None,
+        handoff_return_to: None,
+        chain_id: None,
         trace_id: None,
     })
 }
@@ -22,6 +24,8 @@ fn session_metadata(
         handoff_from: None,
         handoff_to: None,
         handoff_chain: None,
+        handoff_return_to: None,
+        chain_id: None,
         trace_id: None,
     });
     if let Some(sess) = session {
@@ -230,6 +234,27 @@ pub fn mock_core_intent(
     // Agent-scoped routing hints
     if let Some(a) = agent {
         if a.id == "swarm-coordinator" {
+            if lower.contains("chain") || lower.contains("multi-hop") || lower.contains("delegate chain") {
+                let mut meta = metadata.clone();
+                if let Some(ref mut m) = meta {
+                    m.handoff_chain = Some(vec![
+                        "swarm-coordinator".into(),
+                        "repo-keeper".into(),
+                        "runtime-executor".into(),
+                    ]);
+                    m.chain_id = Some(
+                        session
+                            .map(|s| s.id.clone())
+                            .unwrap_or_else(|| "chain".into()),
+                    );
+                }
+                return CoreIntent::PlanOnly {
+                    reasoning: format!(
+                        "Orchestrator delegating via multi-hop chain for: {prompt}"
+                    ),
+                    metadata: meta,
+                };
+            }
             if lower.contains("git") || lower.contains("repo") || lower.contains("status") {
                 return CoreIntent::ToolExecute {
                     target: "git.status".into(),
@@ -435,6 +460,25 @@ pub fn mock_core_intent(
             };
         }
         if a.id == "repo-keeper" {
+            if lower.contains("report back")
+                || lower.contains("return to orchestrator")
+                || lower.contains("hand back")
+            {
+                let mut meta = metadata.clone();
+                if let Some(ref mut m) = meta {
+                    m.handoff_return_to = Some("swarm-coordinator".into());
+                }
+                let summary = session
+                    .map(|s| s.tool_results_summary(3))
+                    .unwrap_or_else(|| "(no prior tool results)".to_string());
+                return CoreIntent::PlanOnly {
+                    reasoning: format!(
+                        "Specialist work complete. Returning summary to orchestrator.
+{summary}"
+                    ),
+                    metadata: meta,
+                };
+            }
             if let Some(intent) =
                 handle_testing_workflow(&a.id, &lower, prompt, session, metadata.clone())
             {
@@ -651,6 +695,9 @@ mod tests {
                     success: true,
                     exit_code: Some(0),
                     handoff_from: None,
+                    peak_rss_kb: None,
+                    cpu_time_ms: None,
+                    runtime_ms: None,
                 },
             )
             .unwrap();

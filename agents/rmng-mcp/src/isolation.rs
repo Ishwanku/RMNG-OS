@@ -22,6 +22,12 @@ pub struct IsolationLimits {
     /// Drop ambient privileges where possible (no_new_privs on Linux).
     #[serde(default)]
     pub no_new_privs: bool,
+    /// Seccomp BPF profile: `basic`, `playwright`, `e2b`, or `off` (Sprint 21).
+    #[serde(default)]
+    pub seccomp_profile: Option<String>,
+    /// Drop all Linux capabilities in pre_exec (after no_new_privs).
+    #[serde(default)]
+    pub drop_capabilities: bool,
 }
 
 impl IsolationLimits {
@@ -36,6 +42,11 @@ impl IsolationLimits {
             new_session: o.new_session || base.new_session,
             cgroup: o.cgroup || base.cgroup,
             no_new_privs: o.no_new_privs || base.no_new_privs,
+            seccomp_profile: o
+                .seccomp_profile
+                .clone()
+                .or_else(|| base.seccomp_profile.clone()),
+            drop_capabilities: o.drop_capabilities || base.drop_capabilities,
         }
     }
 
@@ -46,6 +57,10 @@ impl IsolationLimits {
             || self.new_session
             || self.cgroup
             || self.no_new_privs
+            || self.seccomp_profile.as_ref().is_some_and(|p| {
+                crate::seccomp::normalize_profile(p).is_some()
+            })
+            || self.drop_capabilities
     }
 }
 
@@ -57,6 +72,9 @@ pub struct IsolationReport {
     pub rlimit_nproc: Option<u32>,
     pub new_session: bool,
     pub no_new_privs: bool,
+    pub seccomp_profile: Option<String>,
+    pub seccomp_applied: bool,
+    pub capabilities_dropped: bool,
     pub warnings: Vec<String>,
 }
 
@@ -131,6 +149,10 @@ pub mod unix {
             nix::sys::prctl::set_no_new_privs()
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
         }
+        if limits.drop_capabilities {
+            crate::capabilities::drop_all_capabilities()
+                .map_err(std::io::Error::other)?;
+        }
         if let Some(mb) = limits.memory_mb {
             let bytes = (mb as u64).saturating_mul(1024 * 1024);
             let lim = libc::rlimit {
@@ -150,6 +172,12 @@ pub mod unix {
                 let _ = libc::setrlimit(libc::RLIMIT_NPROC, &lim);
             }
         }
+        if let Some(ref raw) = limits.seccomp_profile {
+            if let Some(profile) = crate::seccomp::normalize_profile(raw) {
+                crate::seccomp::apply_profile(profile)
+                    .map_err(std::io::Error::other)?;
+            }
+        }
         Ok(())
     }
 
@@ -160,13 +188,27 @@ pub mod unix {
         }
     }
 
-    pub fn build_report(limits: &IsolationLimits, cgroup: Option<PathBuf>, warnings: Vec<String>) -> IsolationReport {
+    pub fn build_report(limits: &IsolationLimits, cgroup: Option<PathBuf>, mut warnings: Vec<String>) -> IsolationReport {
+        let seccomp_profile = limits
+            .seccomp_profile
+            .as_ref()
+            .and_then(|p| crate::seccomp::normalize_profile(p).map(str::to_string));
+        if limits.seccomp_profile.is_some() && seccomp_profile.is_none() {
+            warnings.push(format!(
+                "seccomp: unknown profile {:?}",
+                limits.seccomp_profile
+            ));
+        }
+        let seccomp_applied = seccomp_profile.is_some();
         IsolationReport {
             cgroup_path: cgroup,
             rlimit_as: limits.memory_mb,
             rlimit_nproc: limits.pids_max,
             new_session: limits.new_session,
             no_new_privs: limits.no_new_privs,
+            seccomp_profile,
+            seccomp_applied,
+            capabilities_dropped: limits.drop_capabilities,
             warnings,
         }
     }
@@ -215,5 +257,14 @@ mod tests {
         assert_eq!(m.memory_mb, Some(256));
         assert_eq!(m.cpu_percent, Some(50));
         assert!(m.new_session);
+    }
+
+    #[test]
+    fn seccomp_makes_isolation_active() {
+        let limits = IsolationLimits {
+            seccomp_profile: Some("e2b".into()),
+            ..Default::default()
+        };
+        assert!(limits.is_active());
     }
 }

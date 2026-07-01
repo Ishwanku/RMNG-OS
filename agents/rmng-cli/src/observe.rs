@@ -1,5 +1,6 @@
 use rmng_core::{
-    budget_governance_report, rollup_llm_costs, rollup_recent_days, AuditLog, AuditTrack,
+    budget_governance_report, rollup_llm_costs, rollup_mcp_resources, rollup_recent_days,
+    AuditLog, AuditTrack,
     BudgetEnforceMode, IntegrationRegistry, PermissionGate,
     RmngConfig, AUDIT_SCHEMA_VERSION,
 };
@@ -8,6 +9,7 @@ use rmng_nervous::{
     circuit_state_path, health_check_detailed, list_circuit_statuses, load_skill_index,
     reload_from_disk, AgentRegistry, NervousConnector,
 };
+use chrono::Utc;
 use serde::Serialize;
 
 const AUDIT_TAIL: usize = 8;
@@ -33,7 +35,10 @@ fn agent_budget_caps() -> Vec<(String, Option<f64>)> {
 
 #[derive(Serialize)]
 struct ObserveCostJson {
+    schema_version: u32,
+    generated_at: String,
     cost_rollup: rmng_core::CostRollupReport,
+    resource_rollup: rmng_core::ResourceRollupReport,
     spent_last_7d_usd: f64,
     budgets: rmng_core::BudgetGovernanceReport,
     circuit_breakers: Vec<rmng_nervous::CircuitStatus>,
@@ -50,13 +55,17 @@ pub async fn print_observe(cost_only: bool, json: bool) {
 
     if cost_only || json {
         let rollup = rollup_llm_costs(&entries);
+        let resource_rollup = rollup_mcp_resources(&entries);
         let spent_7d = rollup_recent_days(&entries, 7);
         let budgets = budget_governance_report(&cfg, &entries, &agent_budget_caps());
         let circuits = list_circuit_statuses();
         let circuits_open = circuits.iter().filter(|c| c.open).count() as u32;
         if json {
             let out = ObserveCostJson {
+                schema_version: 1,
+                generated_at: Utc::now().to_rfc3339(),
                 cost_rollup: rollup,
+                resource_rollup: resource_rollup.clone(),
                 spent_last_7d_usd: spent_7d,
                 budgets,
                 circuit_breakers: circuits,
@@ -67,13 +76,13 @@ pub async fn print_observe(cost_only: bool, json: bool) {
             println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
             return;
         }
-        print_cost_rollups(&rollup, spent_7d, &budgets, &circuits);
+        print_cost_rollups(&rollup, &resource_rollup, spent_7d, &budgets, &circuits);
         if cost_only {
             return;
         }
     }
 
-    println!("=== RMNG observe ===");
+    println!("=== RMNG observe (v1) ===");
     println!();
 
     let connector = NervousConnector::from_config(cfg.clone());
@@ -94,18 +103,21 @@ pub async fn print_observe(cost_only: bool, json: bool) {
     let iso = &cfg.isolation;
     if iso.is_active() {
         println!(
-            "isolation:   mem={:?}MB cpu={:?}% pids={:?} cgroup={} session={} no_new_privs={}",
+            "isolation:   mem={:?}MB cpu={:?}% pids={:?} cgroup={} session={} no_new_privs={} seccomp={:?} cap_drop={}",
             iso.memory_mb,
             iso.cpu_percent,
             iso.pids_max,
             iso.cgroup,
             iso.new_session,
-            iso.no_new_privs
+            iso.no_new_privs,
+            iso.seccomp_profile,
+            iso.drop_capabilities
         );
     } else {
         println!("isolation:   disabled (set [isolation] in config.toml)");
     }
     print_budget_summary(&cfg, &entries);
+    print_resource_summary(&entries);
     reload_from_disk();
     print_circuit_summary();
     println!();
@@ -248,7 +260,7 @@ fn print_session_observability() {
                         cost_line
                     );
                     let mut agents: Vec<_> = by_agent.into_iter().collect();
-                    agents.sort_by(|a, b| b.1.1.partial_cmp(&a.1 .1).unwrap_or(std::cmp::Ordering::Equal));
+                    agents.sort_by(|a, b| b.1.1.partial_cmp(&a.1.1).unwrap_or(std::cmp::Ordering::Equal));
                     for (agent, (tok, cost)) in agents.iter().take(3) {
                         println!("      {agent}: tokens={tok} cost=${cost:.4}");
                     }
@@ -293,11 +305,16 @@ fn print_audit_tail(audit_log: &AuditLog) {
                 let cat = e.category.map(|c| c.as_str()).unwrap_or("-");
                 let cost = e.cost_usd.map(|c| format!(" ${c:.6}")).unwrap_or_default();
                 let agent = e.agent_id.as_deref().unwrap_or("-");
+                let rss = e
+                    .mcp_peak_rss_kb
+                    .map(|r| format!(" rss={r}KB"))
+                    .unwrap_or_default();
                 println!(
-                    "  [{}] {cat} {agent} {} {}{cost}",
+                    "  [{}] {cat} {agent} {} {}{}{rss}",
                     e.timestamp.format("%H:%M:%S"),
                     e.action,
-                    track
+                    track,
+                    cost
                 );
             }
         }
@@ -305,8 +322,44 @@ fn print_audit_tail(audit_log: &AuditLog) {
     }
 }
 
+
+
+fn print_resource_summary(entries: &[rmng_core::AuditEntry]) {
+    let rollup = rollup_mcp_resources(entries);
+    if rollup.total_mcp_calls == 0 {
+        return;
+    }
+    println!(
+        "mcp resources: {} calls, peak_rss_max={}KB cpu_total={}ms runtime_total={}ms",
+        rollup.total_mcp_calls,
+        rollup.peak_rss_kb_max,
+        rollup.cpu_time_ms_total,
+        rollup.runtime_ms_total
+    );
+    if !rollup.top_consumers.is_empty() {
+        println!("  top consumers (peak RSS):");
+        for c in &rollup.top_consumers {
+            println!(
+                "    {}  peak={}KB cpu={}ms calls={}",
+                c.id, c.peak_rss_kb_max, c.cpu_time_ms_total, c.mcp_calls
+            );
+        }
+    }
+    if !rollup.recent_high_resource.is_empty() {
+        println!("  recent high-resource MCP calls:");
+        for h in rollup.recent_high_resource.iter().take(3) {
+            let agent = h.agent_id.as_deref().unwrap_or("-");
+            println!(
+                "    {} {} peak={:?}KB cpu={:?}ms",
+                h.timestamp, agent, h.peak_rss_kb, h.cpu_time_ms
+            );
+        }
+    }
+}
+
 fn print_cost_rollups(
     rollup: &rmng_core::CostRollupReport,
+    resources: &rmng_core::ResourceRollupReport,
     spent_7d: f64,
     budgets: &rmng_core::BudgetGovernanceReport,
     circuits: &[rmng_nervous::CircuitStatus],
@@ -376,5 +429,38 @@ fn print_cost_rollups(
     );
     for c in open {
         println!("  OPEN {} failures={}", c.provider_id, c.failures);
+    }
+    if resources.total_mcp_calls > 0 {
+        println!();
+        println!("-- MCP resources --");
+        println!(
+            "  calls: {} today={}, peak_rss_max={}KB, cpu_total={}ms",
+            resources.total_mcp_calls,
+            resources.mcp_calls_today,
+            resources.peak_rss_kb_max,
+            resources.cpu_time_ms_total
+        );
+        if !resources.by_agent_today_ranked.is_empty() {
+            println!("  agents today (by peak RSS):");
+            for a in resources.by_agent_today_ranked.iter().take(5) {
+                println!(
+                    "    {}  peak={}KB cpu={}ms calls={}",
+                    a.id, a.peak_rss_kb_max, a.cpu_time_ms_total, a.mcp_calls
+                );
+            }
+        }
+        if !resources.recent_high_resource.is_empty() {
+            println!("  recent high-resource:");
+            for h in resources.recent_high_resource.iter().take(5) {
+                let agent = h.agent_id.as_deref().unwrap_or("-");
+                println!(
+                    "    {} {} peak={:?}KB cpu={:?}ms",
+                    &h.timestamp[..19.min(h.timestamp.len())],
+                    agent,
+                    h.peak_rss_kb,
+                    h.cpu_time_ms
+                );
+            }
+        }
     }
 }

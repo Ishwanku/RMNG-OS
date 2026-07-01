@@ -164,6 +164,7 @@ impl Runtime {
                 Some(e.to_string()),
                 Some(AuditCategory::System),
                 None,
+                None,
             );
             return Ok(HandleResponse::failure(e.to_string()));
         }
@@ -179,7 +180,8 @@ impl Runtime {
                     Some(reason.clone()),
                     Some(AuditCategory::System),
                     None,
-                );
+                    None,
+            );
                 return Ok(HandleResponse::failure(reason));
             }
             PermissionVerdict::Allow => {}
@@ -196,13 +198,15 @@ impl Runtime {
                     None,
                     Some(AuditCategory::Plan),
                     None,
-                );
+                    None,
+            );
                 Ok(HandleResponse::core_success(
                     "plan.only",
                     Some(ToolResult {
                         success: true,
                         output: reasoning.clone(),
                         exit_code: Some(0),
+                        resources: None,
                     }),
                 ))
             }
@@ -223,7 +227,8 @@ impl Runtime {
                     None,
                     Some(AuditCategory::Native),
                     None,
-                );
+                    None,
+            );
                 Ok(HandleResponse::core_success("tool.execute", Some(result)))
             }
             CoreIntent::McpProxy {
@@ -266,20 +271,35 @@ impl Runtime {
                     .as_ref()
                     .map(|p| format!("cgroup={}", p.display()))
                     .unwrap_or_else(|| "cgroup=none".into());
+                let res = &mcp_result.resources;
+                let res_detail = format!(
+                    "peak_rss_kb={:?} cpu_ms={:?}",
+                    res.peak_rss_kb, res.cpu_time_ms
+                );
+                let iso = &mcp_result.isolation;
+                let sec_detail = format!(
+                    "seccomp={:?} applied={} caps_dropped={}",
+                    iso.seccomp_profile, iso.seccomp_applied, iso.capabilities_dropped
+                );
+                let mut detail = format!(
+                    "{mcp_server}.{mcp_tool} pid={:?} isolated={} {iso_detail} {}ms {res_detail} {sec_detail}",
+                    mcp_result.pid,
+                    limits.is_active(),
+                    mcp_result.duration_ms
+                );
+                if rmng_mcp::is_high_risk_mcp_server(mcp_server) {
+                    detail.push_str(" risk=high");
+                }
                 self.log_core(
                     intent,
                     &action,
                     "ok",
                     started,
                     Some(AuditTrack::Mcp),
-                    Some(format!(
-                        "{mcp_server}.{mcp_tool} pid={:?} isolated={} {iso_detail} {}ms",
-                        mcp_result.pid,
-                        limits.is_active(),
-                        mcp_result.duration_ms
-                    )),
+                    Some(detail),
                     Some(AuditCategory::Mcp),
                     mcp_result.pid,
+                    Some(res.clone()),
                 );
                 Ok(HandleResponse::core_success(
                     "mcp.proxy",
@@ -287,6 +307,7 @@ impl Runtime {
                         success: true,
                         output,
                         exit_code: Some(0),
+                        resources: Some(mcp_result.resources.clone()),
                     }),
                 ))
             }
@@ -320,6 +341,7 @@ impl Runtime {
         detail_override: Option<String>,
         category: Option<AuditCategory>,
         mcp_pid: Option<u32>,
+        mcp_resources: Option<rmng_mcp::ResourceMetrics>,
     ) {
         let meta = intent.metadata();
         let trace_id = meta.and_then(|m| m.trace_id.clone());
@@ -369,6 +391,10 @@ impl Runtime {
         entry.duration_ms = Some(started.elapsed().as_millis() as u64);
         entry.mcp_server = mcp_server;
         entry.mcp_pid = mcp_pid;
+        if let Some(res) = mcp_resources {
+            entry.mcp_peak_rss_kb = res.peak_rss_kb;
+            entry.mcp_cpu_time_ms = res.cpu_time_ms;
+        }
         entry.detail = detail;
         self.append_audit(&entry);
     }

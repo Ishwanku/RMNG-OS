@@ -70,14 +70,18 @@ model = "llama3.2"
 # name = "gemini-fast"
 # daily_budget_usd = 3.0
 
-# Subprocess isolation defaults for MCP tools (Sprint 10)
+# Subprocess isolation defaults for MCP tools (Sprint 10 + Sprint 21 security)
+# Tighter defaults; per-server overrides in mcp-allowlist.toml.
+# seccomp_profile: off | basic | playwright | e2b (Linux/WSL only)
 [isolation]
-memory_mb = 512
+memory_mb = 384
 cpu_percent = 50
-pids_max = 64
+pids_max = 48
 new_session = true
 cgroup = true
 no_new_privs = true
+drop_capabilities = false
+# seccomp_profile = "basic"  # enable globally only if all MCP servers tolerate it
 
 [[profiles]]
 name = "groq-fast"
