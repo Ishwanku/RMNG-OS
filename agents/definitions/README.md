@@ -51,3 +51,15 @@ rmng session new
 2. Add skills under `skills/<name>/` if needed
 3. For new native tools: manifest + handler (Sprint 1 pipeline)
 4. `cargo test` and `rmng observe`
+
+
+## Session + handoff (Sprint 4)
+
+```bash
+SID=$(rmng session new | awk '{print $2}')
+rmng session set-context "$SID" repo '"'"'RMNG-OS'"'"'
+rmng ask --agent swarm-coordinator "check git status" --session "$SID" --dry-run
+rmng handoff --session "$SID" --from swarm-coordinator --to repo-keeper   --reason "explicit" "check git status" --dry-run
+```
+
+Shared context and recent handoffs are injected into nervous-system prompts when `--session` is set.

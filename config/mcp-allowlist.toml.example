@@ -27,7 +27,7 @@
 enabled = true
 command = "npx"
 args = ["-y", "@github/github-mcp-server"]
-allowed_tools = ["get_issue", "create_issue"]
+allowed_tools = ["get_issue", "create_issue", "search_issues"]
 
 [servers.git]
 enabled = true

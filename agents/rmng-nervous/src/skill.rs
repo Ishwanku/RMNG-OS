@@ -160,6 +160,16 @@ pub fn assemble_prompt_with_agent(
     primary_skill: Option<&AgentSkill>,
     user_prompt: &str,
 ) -> String {
+    assemble_prompt_full(agent, extra_skills, primary_skill, None, user_prompt)
+}
+
+pub fn assemble_prompt_full(
+    agent: Option<&crate::agent::AgentDefinition>,
+    extra_skills: &[AgentSkill],
+    primary_skill: Option<&AgentSkill>,
+    session: Option<&rmng_core::AgentSession>,
+    user_prompt: &str,
+) -> String {
     let mut parts = vec![BASE_SYSTEM_INSTRUCTIONS.to_string()];
 
     if let Some(a) = agent {
@@ -178,6 +188,14 @@ pub fn assemble_prompt_with_agent(
                 a.allowed_mcp_tools.join(", ")
             }
         ));
+    }
+
+    if let Some(sess) = session {
+        let ctx = sess.prompt_context();
+        if !ctx.is_empty() {
+            parts.push(format!("## Session context
+{ctx}"));
+        }
     }
 
     let primary_name = primary_skill
@@ -235,6 +253,21 @@ Do the thing.
             return;
         }
         assert!(index[0].description.len() > 0 || index[0].name.len() > 0);
+    }
+
+    #[test]
+    fn session_context_in_prompt() {
+        use rmng_core::SessionStore;
+        let dir = std::env::temp_dir().join(format!("rmng-skill-ctx-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let mut session = store.create().unwrap();
+        store
+            .set_context(&mut session, "note", serde_json::json!("hello"))
+            .unwrap();
+        let prompt = assemble_prompt_full(None, &[], None, Some(&session), "test");
+        assert!(prompt.contains("hello"));
+        assert!(prompt.contains("Session context"));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

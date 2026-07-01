@@ -49,6 +49,21 @@ enum Commands {
         #[command(subcommand)]
         action: SessionCommands,
     },
+    /// Explicit agent handoff within a session
+    Handoff {
+        #[arg(long, help = "Session id (required)")]
+        session: String,
+        #[arg(long = "from", help = "Source agent id")]
+        from_agent: String,
+        #[arg(long = "to", help = "Target agent id")]
+        to_agent: String,
+        #[arg(long, default_value = "explicit handoff")]
+        reason: String,
+        #[arg(help = "Task prompt for the target agent")]
+        prompt: String,
+        #[arg(long, help = "Produce intent only; do not dispatch")]
+        dry_run: bool,
+    },
     /// List allowed tools
     Tools,
     /// Show runtime status
@@ -65,6 +80,13 @@ enum SessionCommands {
     List,
     /// Show session details
     Show { id: String },
+    /// Set a shared context key (JSON value)
+    SetContext {
+        id: String,
+        key: String,
+        /// JSON value (e.g. "\"hello\"" or "{\"repo\":\"RMNG-OS\"}")
+        value: String,
+    },
 }
 
 async fn dispatch_core_intent(intent: &CoreIntent, dry_run: bool) -> i32 {
@@ -283,7 +305,19 @@ async fn main() {
                                 );
                             }
                         }
-                        dispatch_core_intent(&outcome.intent(), dry_run).await
+                        let mut intent = outcome.intent();
+                        let handoff_from = match &outcome {
+                            RouteOutcome::Handoff { from_agent, .. } => Some(from_agent.as_str()),
+                            _ => None,
+                        };
+                        if let Some(ref sid) = session {
+                            AgentRouter::enrich_intent_metadata(
+                                &mut intent,
+                                Some(sid.as_str()),
+                                handoff_from,
+                            );
+                        }
+                        dispatch_core_intent(&intent, dry_run).await
                     }
                     Err(e) => {
                         eprintln!("agent router: {e}");
@@ -314,6 +348,52 @@ async fn main() {
                 }
             }
         }
+
+        Commands::Handoff {
+            session,
+            from_agent,
+            to_agent,
+            reason,
+            prompt,
+            dry_run,
+        } => {
+            let router = AgentRouter::load();
+            match router
+                .handoff(&session, &from_agent, &to_agent, &prompt, &reason)
+                .await
+            {
+                Ok(outcome) => {
+                    if let RouteOutcome::Handoff {
+                        from_agent,
+                        to_agent,
+                        from_layer,
+                        to_layer,
+                        reason,
+                        ..
+                    } = &outcome
+                    {
+                        println!(
+                            "handoff: {from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {reason}"
+                        );
+                    }
+                    let mut intent = outcome.intent();
+                    let handoff_from = match &outcome {
+                        RouteOutcome::Handoff { from_agent, .. } => Some(from_agent.as_str()),
+                        _ => None,
+                    };
+                    AgentRouter::enrich_intent_metadata(
+                        &mut intent,
+                        Some(session.as_str()),
+                        handoff_from,
+                    );
+                    dispatch_core_intent(&intent, dry_run).await
+                }
+                Err(e) => {
+                    eprintln!("handoff: {e}");
+                    1
+                }
+            }
+        }
         Commands::Session { action } => match action {
             SessionCommands::New => {
                 let store = SessionStore::default_store();
@@ -341,6 +421,32 @@ async fn main() {
                             }
                         }
                         0
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                        1
+                    }
+                }
+            }
+
+            SessionCommands::SetContext { id, key, value } => {
+                let store = SessionStore::default_store();
+                match store.load(&id) {
+                    Ok(mut session) => {
+                        let parsed: serde_json::Value = match serde_json::from_str(&value) {
+                            Ok(v) => v,
+                            Err(_) => serde_json::Value::String(value.clone()),
+                        };
+                        match store.set_context(&mut session, &key, parsed) {
+                            Ok(()) => {
+                                println!("OK: context[{key}] set for session {id}");
+                                0
+                            }
+                            Err(e) => {
+                                eprintln!("{e}");
+                                1
+                            }
+                        }
                     }
                     Err(e) => {
                         eprintln!("{e}");

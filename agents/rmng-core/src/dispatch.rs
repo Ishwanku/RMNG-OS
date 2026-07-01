@@ -268,7 +268,7 @@ impl Runtime {
             CoreIntent::McpProxy { mcp_server, .. } => Some(mcp_server.clone()),
             _ => None,
         };
-        let detail = detail_override.or_else(|| match intent {
+        let mut detail = detail_override.or_else(|| match intent {
             CoreIntent::PlanOnly { reasoning, .. } => Some(reasoning.clone()),
             CoreIntent::ToolExecute { target, .. } => Some(format!("target={target}")),
             CoreIntent::McpProxy {
@@ -277,6 +277,16 @@ impl Runtime {
                 ..
             } => Some(format!("{mcp_server}.{mcp_tool}")),
         });
+        if let Some(meta) = meta {
+            if let Some(from) = &meta.handoff_from {
+                let base = detail.unwrap_or_default();
+                detail = Some(format!("handoff_from={from}; {base}"));
+            }
+            if let Some(sid) = &meta.session_id {
+                let base = detail.unwrap_or_default();
+                detail = Some(format!("session={sid}; {base}"));
+            }
+        }
         let entry = AuditEntry {
             timestamp: Utc::now(),
             intent_id,

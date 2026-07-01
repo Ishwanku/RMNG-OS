@@ -58,6 +58,7 @@ pub enum SessionError {
     Parse(#[from] serde_json::Error),
 }
 
+#[derive(Clone)]
 pub struct SessionStore {
     root: PathBuf,
 }
@@ -187,6 +188,50 @@ impl SessionStore {
 
     fn path_for(&self, id: &str) -> PathBuf {
         self.root.join(format!("{id}.json"))
+    }
+}
+
+
+impl AgentSession {
+    /// Format shared context + recent handoffs for nervous-system prompt injection.
+    pub fn prompt_context(&self) -> String {
+        let mut parts = Vec::new();
+        parts.push(format!("session_id: {}", self.id));
+        if let Some(prompt) = &self.task_state.current_prompt {
+            parts.push(format!("current_task: {prompt}"));
+        }
+        if !self.shared_context.is_empty() {
+            let ctx = serde_json::to_string_pretty(&self.shared_context)
+                .unwrap_or_else(|_| "{}".into());
+            parts.push(format!("shared_context:
+{ctx}"));
+        }
+        if !self.handoff_history.is_empty() {
+            let tail: Vec<_> = self.handoff_history.iter().rev().take(5).collect();
+            let lines: Vec<String> = tail
+                .into_iter()
+                .rev()
+                .map(|h| {
+                    format!(
+                        "- {} ({}) → {} ({}): {}",
+                        h.from_agent, h.from_layer, h.to_agent, h.to_layer, h.reason
+                    )
+                })
+                .collect();
+            parts.push(format!("recent_handoffs:
+{}", lines.join("
+")));
+        }
+        if !self.active_agents.is_empty() {
+            let active: Vec<String> = self
+                .active_agents
+                .iter()
+                .map(|(layer, slot)| format!("{layer}: {}", slot.agent_id))
+                .collect();
+            parts.push(format!("active_agents: {}", active.join(", ")));
+        }
+        parts.join("
+")
     }
 }
 

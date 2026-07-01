@@ -16,6 +16,10 @@ pub struct Metadata {
     pub trace_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skill_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handoff_from: Option<String>,
 }
 
 /// Internally tagged poly-intent: native tools, MCP proxy, or plan-only reasoning.

@@ -8,6 +8,7 @@ skills:
 allowed_native_tools: []
 allowed_mcp_tools: []
 delegates_to:
+  - research-curator
   - repo-keeper
   - kernel-engineer
   - system-health

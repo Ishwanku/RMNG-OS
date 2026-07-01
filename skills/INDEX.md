@@ -11,3 +11,4 @@ Intent-shaping guides for the nervous system (BYO-LLM). **Do not execute tools d
 | Phase gates | [phase-gates/SKILL.md](phase-gates/SKILL.md) | Phase completion checks against `docs/ROADMAP.md` success criteria |
 
 Format: [Agent Skills specification](https://agentskills.io).
+- [research-workflow](research-workflow/SKILL.md) — Research and documentation curation

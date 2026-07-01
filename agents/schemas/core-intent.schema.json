@@ -22,6 +22,16 @@
           "type": "string",
           "minLength": 1,
           "description": "Nervous-system skill that shaped this intent (e.g. kernel-build)"
+        },
+        "session_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Multi-agent session correlation id"
+        },
+        "handoff_from": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Agent id that delegated this intent (handoff chain)"
         }
       }
     },

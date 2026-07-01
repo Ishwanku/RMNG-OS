@@ -4,6 +4,8 @@ use rmng_core::{CoreIntent, Metadata};
 fn skill_metadata(skill_name: Option<&str>) -> Option<Metadata> {
     skill_name.map(|name| Metadata {
         skill_name: Some(name.to_string()),
+        session_id: None,
+        handoff_from: None,
         trace_id: None,
     })
 }
@@ -47,6 +49,20 @@ pub fn mock_core_intent(
             return CoreIntent::ToolExecute {
                 target: "kernel.status".into(),
                 parameters: serde_json::json!({}),
+                metadata,
+            };
+        }
+        if a.id == "research-curator" {
+            if lower.contains("search") || lower.contains("issue") {
+                return CoreIntent::McpProxy {
+                    mcp_server: "github".into(),
+                    mcp_tool: "search_issues".into(),
+                    mcp_args: serde_json::json!({ "query": "repo:Ishwanku/RMNG-OS is:open" }),
+                    metadata,
+                };
+            }
+            return CoreIntent::PlanOnly {
+                reasoning: format!("Research summary for: {prompt}"),
                 metadata,
             };
         }

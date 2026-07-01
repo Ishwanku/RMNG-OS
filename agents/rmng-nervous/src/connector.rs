@@ -1,7 +1,8 @@
 use crate::agent::AgentDefinition;
 use crate::mock::mock_core_intent;
 use crate::ollama::OllamaAdapter;
-use crate::skill::{assemble_prompt_with_agent, AgentSkill};
+use crate::skill::{assemble_prompt_full, AgentSkill};
+use rmng_core::AgentSession;
 use rmng_core::{CoreIntent, LlmProvider, RmngConfig};
 
 #[derive(Debug, thiserror::Error)]
@@ -36,7 +37,7 @@ impl NervousConnector {
         skill_name: Option<&str>,
         skill: Option<&AgentSkill>,
     ) -> Result<CoreIntent, ConnectorError> {
-        self.reason_core_with_agent(prompt, None, skill_name, skill, &[])
+        self.reason_core_with_session(prompt, None, None, skill_name, skill, &[])
             .await
     }
 
@@ -49,7 +50,21 @@ impl NervousConnector {
         skill: Option<&AgentSkill>,
         extra_skills: &[AgentSkill],
     ) -> Result<CoreIntent, ConnectorError> {
-        let assembled = assemble_prompt_with_agent(agent, extra_skills, skill, prompt);
+        self.reason_core_with_session(prompt, agent, None, skill_name, skill, extra_skills)
+            .await
+    }
+
+    /// Session-aware reasoning — injects shared context when session is active.
+    pub async fn reason_core_with_session(
+        &self,
+        prompt: &str,
+        agent: Option<&AgentDefinition>,
+        session: Option<&AgentSession>,
+        skill_name: Option<&str>,
+        skill: Option<&AgentSkill>,
+        extra_skills: &[AgentSkill],
+    ) -> Result<CoreIntent, ConnectorError> {
+        let assembled = assemble_prompt_full(agent, extra_skills, skill, session, prompt);
 
         match self.config.llm.llm_provider {
             LlmProvider::None => Ok(mock_core_intent(

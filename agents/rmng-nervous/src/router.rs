@@ -2,7 +2,7 @@ use crate::agent::{AgentDefinition, AgentError, AgentRegistry};
 use crate::layer::AgentLayer;
 use crate::skill::{load_skills_for_agent, AgentSkill, SkillError};
 use crate::{ConnectorError, NervousConnector};
-use rmng_core::session::{SessionStore};
+use rmng_core::session::SessionStore;
 use rmng_core::CoreIntent;
 
 /// Resolved routing context for an agent invocation.
@@ -65,10 +65,18 @@ impl AgentRouter {
     }
 
     pub fn with_registry(registry: AgentRegistry, connector: NervousConnector) -> Self {
+        Self::with_session_store(registry, connector, SessionStore::default_store())
+    }
+
+    pub fn with_session_store(
+        registry: AgentRegistry,
+        connector: NervousConnector,
+        sessions: SessionStore,
+    ) -> Self {
         Self {
             registry,
             connector,
-            sessions: SessionStore::default_store(),
+            sessions,
         }
     }
 
@@ -113,7 +121,7 @@ impl AgentRouter {
                 .orchestrate(session_id, &route, prompt)
                 .await;
         }
-        let intent = self.reason_for_route(&route, prompt).await?;
+        let intent = self.reason_for_route(session_id, &route, prompt).await?;
         route.agent.allows_core_intent(&intent).map_err(RouterError::PolicyDenied)?;
         if let Some(sid) = session_id {
             self.touch_session(sid, &route.agent, prompt)?;
@@ -137,7 +145,7 @@ impl AgentRouter {
         let to = self.registry.get(to_id)?.clone();
         from.validate_handoff_to(&to)?;
         let route = self.resolve(to_id)?;
-        let intent = self.reason_for_route(&route, prompt).await?;
+        let intent = self.reason_for_route(Some(session_id), &route, prompt).await?;
         to.allows_core_intent(&intent).map_err(RouterError::PolicyDenied)?;
 
         let mut session = self
@@ -176,7 +184,7 @@ impl AgentRouter {
         prompt: &str,
     ) -> Result<RouteOutcome, RouterError> {
         let orchestrator = &route.agent;
-        let plan = self.reason_for_route(route, prompt).await?;
+        let plan = self.reason_for_route(session_id, route, prompt).await?;
 
         let (delegate_hint, reason) = match &plan {
             CoreIntent::ToolExecute { target, .. } => (target.clone(), format!("execute {target}")),
@@ -197,7 +205,7 @@ impl AgentRouter {
 
         let delegate = self.registry.resolve_handoff_target(orchestrator, &delegate_hint)?;
         let delegate_route = self.resolve(&delegate.id)?;
-        let intent = self.reason_for_route(&delegate_route, prompt).await?;
+        let intent = self.reason_for_route(session_id, &delegate_route, prompt).await?;
         delegate
             .allows_core_intent(&intent)
             .map_err(RouterError::PolicyDenied)?;
@@ -240,21 +248,54 @@ impl AgentRouter {
 
     async fn reason_for_route(
         &self,
+        session_id: Option<&str>,
         route: &AgentRoute,
         prompt: &str,
     ) -> Result<CoreIntent, RouterError> {
         let primary_skill = route.skill_names.first().map(|s| s.as_str());
         let primary_skill_body = route.skills.first();
+        let session = session_id
+            .and_then(|sid| self.sessions.load(sid).ok());
         Ok(self
             .connector
-            .reason_core_with_agent(
+            .reason_core_with_session(
                 prompt,
                 Some(&route.agent),
+                session.as_ref(),
                 primary_skill,
                 primary_skill_body,
                 &route.skills,
             )
             .await?)
+    }
+
+    /// Attach session/handoff metadata to an intent before rmngd dispatch.
+    pub fn enrich_intent_metadata(
+        intent: &mut CoreIntent,
+        session_id: Option<&str>,
+        handoff_from: Option<&str>,
+    ) {
+        use rmng_core::intent::Metadata;
+        let patch = |meta: &mut Option<Metadata>| {
+            let m = meta.get_or_insert(Metadata {
+                trace_id: None,
+                skill_name: None,
+                session_id: None,
+                handoff_from: None,
+            });
+            if let Some(sid) = session_id {
+                m.session_id = Some(sid.to_string());
+                m.trace_id = Some(sid.to_string());
+            }
+            if let Some(from) = handoff_from {
+                m.handoff_from = Some(from.to_string());
+            }
+        };
+        match intent {
+            CoreIntent::ToolExecute { metadata, .. }
+            | CoreIntent::McpProxy { metadata, .. }
+            | CoreIntent::PlanOnly { metadata, .. } => patch(metadata),
+        }
     }
 
     fn touch_session(

@@ -142,7 +142,8 @@ Multi-agent routing, layer model, session store, swarm handoffs.
 | **Sprint 1** | ✅ | IntegrationRegistry, IntentValidator, Audit v2, MCP lifecycle |
 | **Sprint 2** | ✅ | Agent definitions, router, `rmng ask --agent`, `rmng observe`, progressive skills |
 | **Sprint 3** | ✅ | L1–L4 layer model, session store, layer-aware router, ADR-017 |
-| **Sprint 4** | Planned | Controlled repo ingestion, swarm expansion, daemon integration tests |
+| **Sprint 4a** | ✅ | Shared context in prompts, `rmng handoff`, daemon E2E tests, light ingestion |
+| **Sprint 4b** | Planned | Multi-hop handoffs, session prune, live LLM orchestration |
 
 See [ADR-017](decisions/ADR-017-multi-level-agent-architecture.md).
 

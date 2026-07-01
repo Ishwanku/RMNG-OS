@@ -1,0 +1,14 @@
+id: research-curator
+layer: L3
+description: >-
+  Research and documentation specialist — synthesizes findings, queries GitHub
+  issues via MCP, and produces plan-only recommendations. No kernel or git write ops.
+skills:
+  - research-workflow
+  - phase-gates
+allowed_native_tools:
+  - github.pr_status
+allowed_mcp_tools:
+  - github:search_issues
+  - github:get_issue
+delegates_to: []
