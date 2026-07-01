@@ -1,8 +1,9 @@
-//! LLM-facing orchestration guidance for multi-hop chains (Sprint 24–30).
+//! LLM-facing orchestration guidance for multi-hop chains (Sprint 24–31).
 
 use crate::agent::AgentDefinition;
 use crate::layer::AgentLayer;
-use rmng_core::AgentSession;
+use crate::providers::list_circuit_statuses;
+use rmng_core::{check_budget_from_audit_for_agent, AgentSession, BudgetLevel, RmngConfig};
 
 /// Canonical agent ids valid in handoff metadata (loaded from definitions/).
 pub const KNOWN_AGENT_IDS: &[&str] = &[
@@ -117,6 +118,78 @@ pub fn session_chain_hints(session: &AgentSession, agent: Option<&AgentDefinitio
     parts.join("\n")
 }
 
+/// Inject live circuit/budget/orchestration failure signals (Sprint 31).
+pub fn dynamic_recovery_block(
+    cfg: &RmngConfig,
+    session: &AgentSession,
+    agent: Option<&AgentDefinition>,
+) -> Option<String> {
+    let mut lines = Vec::new();
+
+    for c in list_circuit_statuses().into_iter().filter(|c| c.open) {
+        lines.push(format!(
+            "circuit OPEN: provider={} failures={} cooldown_secs={:?} — do not rely on this provider; prefer handoff_return_to or plan.only summary",
+            c.provider_id, c.failures, c.cooldown_secs_remaining
+        ));
+    }
+
+    let agent_id = agent.map(|a| a.id.as_str());
+    let agent_cap = agent.and_then(|a| a.daily_budget_usd);
+    if let Some(budget) = check_budget_from_audit_for_agent(cfg, agent_id, agent_cap) {
+        match budget.level {
+            BudgetLevel::Warn => {
+                lines.push(format!(
+                    "budget WARN: {} — minimize LLM/tool calls; prefer handoff_return_to with summary",
+                    budget.message
+                ));
+            }
+            BudgetLevel::Deny => {
+                lines.push(format!(
+                    "budget DENY: {} — emit plan.only only; use handoff_return_to; no tool.execute",
+                    budget.message
+                ));
+            }
+            BudgetLevel::Ok => {}
+        }
+    }
+
+    if let Some(orch) = session.shared_context.get("orchestration") {
+        if let Some(status) = orch.get("status").and_then(|v| v.as_str()) {
+            if status == "failed" {
+                lines.push(
+                    "orchestration.status=failed — emit handoff_return_to with failure summary; do NOT restart handoff_chain"
+                        .into(),
+                );
+            }
+        }
+        if let Some(skipped) = orch.get("skipped_hops").and_then(|v| v.as_array()) {
+            if !skipped.is_empty() {
+                lines.push(format!(
+                    "orchestration.skipped_hops={} — summarize skipped work in reasoning; prefer handoff_return_to",
+                    skipped.len()
+                ));
+            }
+        }
+        if let Some(decisions) = orch.get("hop_decisions").and_then(|v| v.as_array()) {
+            if !decisions.is_empty() {
+                lines.push(format!(
+                    "orchestration.hop_decisions={} — cite hop outcomes; do not re-emit identical chain",
+                    decisions.len()
+                ));
+            }
+        }
+    }
+
+    if lines.is_empty() {
+        return None;
+    }
+
+    Some(format!(
+        "## Live recovery signals (act now)\n{}\n",
+        lines.join("\n")
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,6 +205,27 @@ mod tests {
         assert!(out.contains("handoff_return_to"));
         assert!(out.contains("circuit breaker"));
         assert!(out.contains("swarm-coordinator\",\"repo-keeper"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn dynamic_recovery_includes_failed_orchestration() {
+        let dir = std::env::temp_dir().join(format!("rmng-dyn-rec-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let mut session = store.create().expect("session");
+        store
+            .set_orchestration_state(
+                &mut session,
+                serde_json::json!({
+                    "status": "failed",
+                    "skipped_hops": [{"hop": 1, "agent": "repo-keeper"}],
+                }),
+            )
+            .expect("orch");
+        let cfg = RmngConfig::default();
+        let block = dynamic_recovery_block(&cfg, &session, None).expect("block");
+        assert!(block.contains("orchestration.status=failed"));
+        assert!(block.contains("skipped_hops"));
         let _ = std::fs::remove_dir_all(dir);
     }
 }

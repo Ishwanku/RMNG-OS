@@ -255,3 +255,8 @@ code ~/dev/projects/RMNG-OS
 - Parser hardening: semicolon chains, empty array filter, invalid chain drop + warn
 - Live chain E2E tests (Groq, Grok, Ollama) with strict HandoffChain assertion
 - Chain emission matrix tests; [live-llm-orchestration.md](integrations/live-llm-orchestration.md)
+### Sprint 31 — Dynamic recovery & broader live testing ✅
+- `dynamic_recovery_block` injects live circuit/budget/hop failure state into prompts
+- Live `handoff_return_to` E2E (Groq, Grok, OpenAI, Anthropic, Google, Ollama)
+- Extended live chain E2E to OpenAI/Anthropic/Google; strict matrix alignment
+- Parser telemetry audit events (`parse_normalize`, `parse_repair`)

@@ -59,7 +59,7 @@ async fn live_llm_assembled_prompt_includes_session_orchestration_guide() {
     )
     .expect("definitions");
     let agent = reg.get("repo-keeper").expect("repo-keeper");
-    let prompt = assemble_prompt_full(Some(agent), &[], None, Some(&session), "summarize status");
+    let prompt = assemble_prompt_full(Some(agent), &[], None, Some(&session), "summarize status", None);
     assert!(prompt.contains("Multi-agent session orchestration"));
     assert!(prompt.contains("recent_tool_results"));
     assert!(prompt.contains("git.status"));

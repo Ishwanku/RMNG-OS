@@ -32,6 +32,11 @@ pub async fn reason_with_retry(
     match parse_core_intent(&resp.content) {
         Ok(intent) => Ok(ReasonResult { intent, usage }),
         Err(e) => {
+            log_nervous_event(
+                "nervous.parse_repair",
+                "attempt",
+                Some(&format!("provider={provider_id} error={e}")),
+            );
             attempt_repair(backend, provider_id, assembled, ctx, &resp.content, e, usage).await
         }
     }
@@ -69,9 +74,16 @@ async fn attempt_repair(
     prior_usage.merge(&repair_usage);
 
     parse_core_intent(&resp.content)
-        .map(|intent| ReasonResult {
-            intent,
-            usage: prior_usage,
+        .map(|intent| {
+            log_nervous_event(
+                "nervous.parse_repair",
+                "success",
+                Some(&format!("provider={provider_id}")),
+            );
+            ReasonResult {
+                intent,
+                usage: prior_usage,
+            }
         })
         .map_err(|e| {
             log_nervous_event(

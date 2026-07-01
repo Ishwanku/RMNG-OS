@@ -1,3 +1,4 @@
+use crate::nervous_audit::log_nervous_event;
 use rmng_core::CoreIntent;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
@@ -341,6 +342,11 @@ pub fn normalize_intent_value(value: &mut Value) {
             _ => None,
         };
         if let Some(normalized) = alias {
+            log_nervous_event(
+                "nervous.parse_normalize",
+                "action_alias",
+                Some(&format!("{action} -> {normalized}")),
+            );
             obj.insert("action".into(), Value::String(normalized.to_string()));
         }
     }
@@ -369,12 +375,24 @@ pub fn normalize_intent_value(value: &mut Value) {
     if let Some(chain) = meta.get("handoff_chain").cloned() {
         match normalize_handoff_chain_value(chain.clone()) {
             Some(normalized) => {
+                if normalized != chain {
+                    log_nervous_event(
+                        "nervous.parse_normalize",
+                        "handoff_chain",
+                        Some(&format!("coerced {chain} -> {normalized}")),
+                    );
+                }
                 meta.insert("handoff_chain".into(), normalized);
             }
             None => {
                 tracing::warn!(
                     handoff_chain = %chain,
                     "dropped invalid handoff_chain (need >= 2 agent ids after normalization)"
+                );
+                log_nervous_event(
+                    "nervous.parse_normalize",
+                    "handoff_chain_dropped",
+                    Some(&format!("invalid chain: {chain}")),
                 );
                 meta.remove("handoff_chain");
             }

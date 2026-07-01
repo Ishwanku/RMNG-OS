@@ -1,4 +1,4 @@
-# Live LLM multi-hop orchestration (Sprint 30)
+# Live LLM multi-hop orchestration (Sprint 30–31)
 
 Guide for running multi-agent `handoff_chain` and `handoff_return_to` workflows with real LLM providers.
 
@@ -22,9 +22,21 @@ rmng ask --session "$SID" --agent swarm-coordinator --auto-continue --max-steps 
 
 1. `SESSION_ORCHESTRATION_GUIDE` — decision tree + strict JSON rules
 2. `orchestration_prompt::session_chain_hints` — recipes, few-shot examples, error recovery
-3. `build_reasoning_prompt` — provider-specific hints + chain format rules + examples
+3. `orchestration_prompt::dynamic_recovery_block` — **live** circuit/budget/hop failure signals (Sprint 31)
+4. `build_reasoning_prompt` — provider-specific hints + chain format rules + examples
 
 Provider hints are injected via `LlmReasonContext.provider_id` during LLM calls.
+
+### Dynamic recovery (Sprint 31)
+
+When a session is active, the connector passes config into `assemble_prompt_full`, which may inject:
+
+| Signal | Source | LLM action |
+|--------|--------|------------|
+| `circuit OPEN` | `circuit-state.json` | plan.only / handoff_return_to — do not retry dead provider |
+| `budget WARN/DENY` | audit rollups | DENY → no tool.execute; return to orchestrator |
+| `orchestration.status=failed` | session `shared_context` | handoff_return_to with summary — no chain restart |
+| `skipped_hops` / `hop_decisions` | session orchestration | summarize; do not re-emit identical chain |
 
 ## Required metadata
 
@@ -61,15 +73,20 @@ When a hop fails, circuit opens, or budget denies:
 # Offline parser normalization
 cargo test -p rmng-nervous --test chain_parse_e2e
 
-# Live chain emission (needs API keys / Ollama)
+# Live chain emission (needs API keys / Ollama; soft-skips without keys)
 cargo test -p rmng-nervous --test live_llm_chain_e2e -- --nocapture
+
+# Live handoff_return_to (specialist → orchestrator; soft-skips without keys)
+cargo test -p rmng-nervous --test live_llm_return_e2e -- --nocapture
 
 # Strict mode (default): requires HandoffChain len >= 2
 RMNG_CHAIN_STRICT=0 cargo test -p rmng-nervous --test live_llm_chain_e2e -- --nocapture
 
-# Full provider matrix (ignored by default)
+# Full provider matrix (ignored by default; OpenAI / Anthropic / Google / Groq / Grok)
 cargo test -p rmng-nervous --test live_llm_chain_matrix -- --ignored --nocapture
 ```
+
+Parser normalization/repair emits `nervous.parse_normalize` and `nervous.parse_repair` audit events — see [live-llm-chain-quirks.md](live-llm-chain-quirks.md#parser-telemetry-sprint-31).
 
 ## Troubleshooting
 

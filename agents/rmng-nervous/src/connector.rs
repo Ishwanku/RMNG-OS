@@ -77,7 +77,7 @@ impl NervousConnector {
         skill: Option<&AgentSkill>,
         extra_skills: &[AgentSkill],
     ) -> Result<CoreIntent, ConnectorError> {
-        let assembled = assemble_prompt_full(agent, extra_skills, skill, session, prompt);
+        let assembled = assemble_prompt_full(agent, extra_skills, skill, session, prompt, Some(&self.config));
 
         let llm_ctx = LlmReasonContext {
             session_id: session.map(|s| s.id.as_str()),

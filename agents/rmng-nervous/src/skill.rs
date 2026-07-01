@@ -191,7 +191,7 @@ pub fn assemble_prompt_with_agent(
     primary_skill: Option<&AgentSkill>,
     user_prompt: &str,
 ) -> String {
-    assemble_prompt_full(agent, extra_skills, primary_skill, None, user_prompt)
+    assemble_prompt_full(agent, extra_skills, primary_skill, None, user_prompt, None)
 }
 
 pub fn assemble_prompt_full(
@@ -200,6 +200,7 @@ pub fn assemble_prompt_full(
     primary_skill: Option<&AgentSkill>,
     session: Option<&rmng_core::AgentSession>,
     user_prompt: &str,
+    cfg: Option<&rmng_core::RmngConfig>,
 ) -> String {
     let mut parts = vec![BASE_SYSTEM_INSTRUCTIONS.to_string()];
 
@@ -224,6 +225,11 @@ pub fn assemble_prompt_full(
     if let Some(sess) = session {
         parts.push(SESSION_ORCHESTRATION_GUIDE.to_string());
         parts.push(orchestration_prompt::session_chain_hints(sess, agent));
+        if let Some(c) = cfg {
+            if let Some(block) = orchestration_prompt::dynamic_recovery_block(c, sess, agent) {
+                parts.push(block);
+            }
+        }
         let ctx = sess.prompt_context();
         if !ctx.is_empty() {
             parts.push(format!("## Session context\n{ctx}"));
@@ -288,6 +294,25 @@ Do the thing.
     }
 
     #[test]
+    fn dynamic_recovery_in_assembled_prompt() {
+        use rmng_core::{RmngConfig, SessionStore};
+        let dir = std::env::temp_dir().join(format!("rmng-skill-dyn-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let mut session = store.create().unwrap();
+        store
+            .set_orchestration_state(
+                &mut session,
+                serde_json::json!({"status": "failed"}),
+            )
+            .unwrap();
+        let cfg = RmngConfig::default();
+        let prompt = assemble_prompt_full(None, &[], None, Some(&session), "test", Some(&cfg));
+        assert!(prompt.contains("Live recovery signals"));
+        assert!(prompt.contains("orchestration.status=failed"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn session_context_in_prompt() {
         use rmng_core::SessionStore;
         let dir = std::env::temp_dir().join(format!("rmng-skill-ctx-{}", uuid::Uuid::new_v4()));
@@ -296,7 +321,7 @@ Do the thing.
         store
             .set_context(&mut session, "note", serde_json::json!("hello"))
             .unwrap();
-        let prompt = assemble_prompt_full(None, &[], None, Some(&session), "test");
+        let prompt = assemble_prompt_full(None, &[], None, Some(&session), "test", None);
         assert!(prompt.contains("hello"));
         assert!(prompt.contains("Session context"));
         assert!(prompt.contains("Multi-agent session orchestration"));

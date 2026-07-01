@@ -1,4 +1,4 @@
-# Live LLM chain quirks (Sprint 25–30)
+# Live LLM chain quirks (Sprint 25–31)
 
 Model-specific behavior when emitting `handoff_chain` and orchestration metadata.
 
@@ -53,11 +53,23 @@ Invalid chains are removed with a `tracing::warn` — router may fall through to
 | Provider hints | `providers/prompt.rs` `provider_chain_hints()` |
 | Repair pass | `providers/reason.rs` `REPAIR_SUFFIX` |
 
+## Parser telemetry (Sprint 31)
+
+Audit log events when normalization or repair fires:
+
+| Event | When |
+|-------|------|
+| `nervous.parse_normalize` / `action_alias` | `plan_only` → `plan.only` |
+| `nervous.parse_normalize` / `handoff_chain` | comma/arrow string coerced to array |
+| `nervous.parse_normalize` / `handoff_chain_dropped` | invalid chain removed |
+| `nervous.parse_repair` / `attempt` \| `success` \| `failed` | LLM JSON repair pass |
+
 ## Testing
 
 ```bash
 cargo test -p rmng-nervous --test chain_parse_e2e
 cargo test -p rmng-nervous --test live_llm_chain_e2e -- --nocapture
+cargo test -p rmng-nervous --test live_llm_return_e2e -- --nocapture
 cargo test -p rmng-nervous --test live_llm_chain_matrix -- --ignored --nocapture
 ```
 
