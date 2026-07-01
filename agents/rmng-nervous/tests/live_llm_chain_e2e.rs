@@ -42,7 +42,7 @@ async fn run_chain_ask(cfg: RmngConfig, label: &str) {
     let registry = rmng_nervous::AgentRegistry::load().expect("registry");
     let router = AgentRouter::with_session_store(registry, NervousConnector::from_config(cfg), store);
 
-    let prompt = "Emit plan.only JSON only. Delegate git status via handoff_chain: swarm-coordinator, repo-keeper. Include metadata.session_id.";
+    let prompt = r#"Return ONE raw JSON object (plan.only). metadata.handoff_chain MUST be JSON array [\"swarm-coordinator\",\"repo-keeper\"] NOT comma string. Include metadata.session_id and metadata.chain_id."#;
     let outcome = router
         .ask_routed(Some(&session.id), "swarm-coordinator", prompt)
         .await

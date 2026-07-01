@@ -28,6 +28,7 @@ Rules:
 - `handoff_chain` MUST be JSON array of agent id strings (min 2 hops).
 - First id MUST be your current agent id when you initiate the chain.
 - Do NOT restart a chain if `orchestration_chain.status` is `in_progress` — continue or return instead.
+- Anti-patterns (break parse): comma-string handoff_chain, arrow strings, markdown fences, `plan_only` action (use `plan.only`).
 - After executing tools successfully, specialists SHOULD `handoff_return_to` the orchestrator unless the user asked for more work.
 "#;
 

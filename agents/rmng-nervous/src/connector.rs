@@ -83,6 +83,7 @@ impl NervousConnector {
             session_id: session.map(|s| s.id.as_str()),
             agent_id: agent.map(|a| a.id.as_str()),
             skill_name,
+            provider_id: None,
         };
 
         let chain: Vec<_> = self
@@ -156,7 +157,9 @@ impl NervousConnector {
                         ));
                     }
                     let started = Instant::now();
-                    match backend.reason_core(&assembled, &llm_ctx).await {
+                    let mut ctx = llm_ctx.clone();
+                    ctx.provider_id = Some(provider_id);
+                    match backend.reason_core(&assembled, &ctx).await {
                         Ok(result) => {
                             record_success(provider_id);
                             let latency_ms = started.elapsed().as_millis() as u64;

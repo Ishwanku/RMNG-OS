@@ -68,10 +68,11 @@ The orchestrator sees `Chain error recovery` in `prompt_context` and orchestrati
 
 Failed hops set `shared_context.orchestration.status = failed` with `failed_hop`, `error`. Audit: `nervous.handoff_chain_hop` outcome `failed`.
 
-## Live LLM notes
+## Live LLM notes (see [live-llm-chain-quirks.md](./live-llm-chain-quirks.md))
 
 - **Groq** (`GROQ_API_KEY`): tends to follow JSON array `handoff_chain` when prompted explicitly.
 - **Grok** (`XAI_API_KEY`): may need explicit "JSON array not comma string" in prompt.
-- Parser normalizes comma-separated `handoff_chain` strings as fallback.
+- Parser normalizes comma/arrow/JSON-string `handoff_chain` and `plan_only` action aliases.
+- Provider-specific hints via `LlmReasonContext.provider_id`.
 
 Run live tests: `cargo test -p rmng-nervous --test live_llm_chain_e2e -- --nocapture`

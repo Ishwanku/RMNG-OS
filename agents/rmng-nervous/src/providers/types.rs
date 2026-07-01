@@ -8,6 +8,8 @@ pub struct LlmReasonContext<'a> {
     pub session_id: Option<&'a str>,
     pub agent_id: Option<&'a str>,
     pub skill_name: Option<&'a str>,
+    /// Active provider id for model-specific chain hints (Sprint 25).
+    pub provider_id: Option<&'a str>,
 }
 
 /// Standard nervous-system request — all providers receive the same shape.
@@ -209,26 +211,105 @@ fn classify_api_error(status: u16, message: &str) -> ProviderErrorKind {
     ProviderErrorKind::Other
 }
 
+fn strip_trailing_commas(json: &str) -> String {
+    let mut s = json.to_string();
+    loop {
+        let next = s.replace(",}", "}").replace(",]", "]");
+        if next == s {
+            break;
+        }
+        s = next;
+    }
+    s
+}
+
+/// Split model-emitted agent lists (comma, arrow, or JSON-array string).
+pub fn parse_agent_id_list(raw: &str) -> Vec<String> {
+    let trimmed = raw.trim();
+    if trimmed.starts_with('[') {
+        if let Ok(Value::Array(arr)) = serde_json::from_str::<Value>(trimmed) {
+            return arr
+                .iter()
+                .filter_map(|v| v.as_str().map(str::trim))
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect();
+        }
+    }
+    let splitter = if trimmed.contains("->") {
+        "->"
+    } else if trimmed.contains('→') {
+        "→"
+    } else if trimmed.contains('|') {
+        "|"
+    } else {
+        ","
+    };
+    trimmed
+        .split(splitter)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn normalize_handoff_chain_value(chain: Value) -> Option<Value> {
+    match chain {
+        Value::Array(mut arr) => {
+            if arr.len() == 1 {
+                if let Some(s) = arr.pop().and_then(|v| v.as_str().map(str::to_string)) {
+                    let ids = parse_agent_id_list(&s);
+                    if ids.len() >= 2 {
+                        return Some(Value::Array(
+                            ids.into_iter().map(Value::String).collect(),
+                        ));
+                    }
+                }
+            }
+            if arr.len() >= 2 {
+                Some(Value::Array(arr))
+            } else {
+                None
+            }
+        }
+        Value::String(s) => {
+            let ids = parse_agent_id_list(&s);
+            if ids.len() >= 2 {
+                Some(Value::Array(ids.into_iter().map(Value::String).collect()))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 /// Extract JSON object from LLM output (fences, prose wrappers).
 pub fn extract_json_payload(content: &str) -> Option<String> {
     let mut trimmed = content.trim();
     if trimmed.starts_with("```") {
         trimmed = trimmed
             .trim_start_matches("```json")
+            .trim_start_matches("```JSON")
             .trim_start_matches("```")
             .trim_end_matches("```")
             .trim();
     }
-    if serde_json::from_str::<Value>(trimmed).is_ok() {
-        return Some(trimmed.to_string());
+    let candidates = [trimmed.to_string(), strip_trailing_commas(trimmed)];
+    for cand in &candidates {
+        if serde_json::from_str::<Value>(cand).is_ok() {
+            return Some(cand.clone());
+        }
     }
     let start = trimmed.find('{')?;
     let end = trimmed.rfind('}')?;
     if end > start {
-        Some(trimmed[start..=end].to_string())
-    } else {
-        None
+        let slice = strip_trailing_commas(&trimmed[start..=end]);
+        if serde_json::from_str::<Value>(&slice).is_ok() {
+            return Some(slice);
+        }
     }
+    None
 }
 
 /// Coerce common LLM mistakes in handoff metadata before strict parse.
@@ -236,20 +317,42 @@ pub fn normalize_intent_value(value: &mut Value) {
     let Some(obj) = value.as_object_mut() else {
         return;
     };
+    if let Some(action) = obj.get("action").and_then(|v| v.as_str()) {
+        let alias = match action.to_ascii_lowercase().as_str() {
+            "plan_only" | "plan-only" | "planonly" => Some("plan.only"),
+            "tool_execute" | "tool-execute" | "toolexecute" => Some("tool.execute"),
+            "mcp_proxy" | "mcp-proxy" | "mcpproxy" => Some("mcp.proxy"),
+            _ => None,
+        };
+        if let Some(normalized) = alias {
+            obj.insert("action".into(), Value::String(normalized.to_string()));
+        }
+    }
+    if !obj.contains_key("metadata") {
+        obj.insert("metadata".into(), Value::Object(serde_json::Map::new()));
+    }
+    let mut hoisted: Vec<(&str, Value)> = Vec::new();
+    for key in [
+        "handoff_chain",
+        "handoff_to",
+        "handoff_return_to",
+        "chain_id",
+        "hop_failure_policy",
+        "hop_retry_max",
+    ] {
+        if let Some(v) = obj.remove(key) {
+            hoisted.push((key, v));
+        }
+    }
     let Some(meta) = obj.get_mut("metadata").and_then(|m| m.as_object_mut()) else {
         return;
     };
+    for (key, v) in hoisted {
+        meta.entry(key.to_string()).or_insert(v);
+    }
     if let Some(chain) = meta.get("handoff_chain").cloned() {
-        if let Some(s) = chain.as_str() {
-            let ids: Vec<Value> = s
-                .split(',')
-                .map(str::trim)
-                .filter(|id| !id.is_empty())
-                .map(|id| Value::String(id.to_string()))
-                .collect();
-            if ids.len() >= 2 {
-                meta.insert("handoff_chain".into(), Value::Array(ids));
-            }
+        if let Some(normalized) = normalize_handoff_chain_value(chain) {
+            meta.insert("handoff_chain".into(), normalized);
         }
     }
     for key in ["handoff_to", "handoff_return_to", "handoff_from", "chain_id"] {
@@ -257,6 +360,11 @@ pub fn normalize_intent_value(value: &mut Value) {
             if let Some(s) = v.as_str() {
                 *v = Value::String(s.trim().to_string());
             }
+        }
+    }
+    if let Some(v) = meta.get_mut("hop_failure_policy") {
+        if let Some(s) = v.as_str() {
+            *v = Value::String(s.trim().to_ascii_lowercase());
         }
     }
 }
@@ -312,6 +420,42 @@ mod tests {
 {"action":"plan.only","reasoning":"done","metadata":{"session_id":"abc"}}
 ```
 "#;
+        let intent = parse_core_intent(raw).expect("parse");
+        assert!(matches!(intent, CoreIntent::PlanOnly { .. }));
+    }
+
+    #[test]
+    fn parses_handoff_chain_from_arrow_string() {
+        let raw = r#"{"action":"plan.only","reasoning":"chain","metadata":{"handoff_chain":"swarm-coordinator -> repo-keeper -> runtime-executor"}}"#;
+        let intent = parse_core_intent(raw).expect("parse");
+        let chain = intent.metadata().unwrap().handoff_chain.as_ref().unwrap();
+        assert_eq!(chain.len(), 3);
+    }
+
+    #[test]
+    fn parses_handoff_chain_from_json_array_string() {
+        let raw = "{\"action\":\"plan.only\",\"reasoning\":\"chain\",\"metadata\":{\"handoff_chain\":\"[\\\"swarm-coordinator\\\",\\\"repo-keeper\\\"]\"}}";
+        let intent = parse_core_intent(raw).expect("parse");
+        assert_eq!(intent.metadata().unwrap().handoff_chain.as_ref().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn normalizes_plan_only_action_alias() {
+        let raw = r#"{"action":"plan_only","reasoning":"x","metadata":{}}"#;
+        let intent = parse_core_intent(raw).expect("parse");
+        assert!(matches!(intent, CoreIntent::PlanOnly { .. }));
+    }
+
+    #[test]
+    fn hoists_top_level_handoff_chain_into_metadata() {
+        let raw = r#"{"action":"plan.only","reasoning":"x","handoff_chain":["swarm-coordinator","repo-keeper"]}"#;
+        let intent = parse_core_intent(raw).expect("parse");
+        assert!(intent.metadata().unwrap().handoff_chain.is_some());
+    }
+
+    #[test]
+    fn strips_trailing_commas_before_parse() {
+        let raw = r#"{"action":"plan.only","reasoning":"x","metadata":{"session_id":"s1",},}"#;
         let intent = parse_core_intent(raw).expect("parse");
         assert!(matches!(intent, CoreIntent::PlanOnly { .. }));
     }
