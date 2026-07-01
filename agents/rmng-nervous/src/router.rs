@@ -763,6 +763,14 @@ Return context: {prompt}"
                 to_id,
                 error,
             );
+            let _ = self.sessions.record_hop_error(
+                &mut session,
+                hop_index,
+                from_id,
+                to_id,
+                error,
+                Some(action),
+            );
         }
         Ok(())
     }
@@ -1090,6 +1098,46 @@ impl RouteOutcome {
             Self::Direct { agent_id, .. } => Some(agent_id),
             Self::Handoff { to_agent, .. } => Some(to_agent),
             Self::HandoffChain { chain, .. } => chain.last().map(|s| s.as_str()),
+        }
+    }
+
+    /// Human-readable chain summary for CLI (Sprint 25).
+    pub fn chain_outcome_summary(&self) -> Option<String> {
+        match self {
+            Self::HandoffChain {
+                chain,
+                hops,
+                skipped_hops,
+                reason,
+                ..
+            } => {
+                let mut lines = vec![format!("handoff-chain ({reason}): {}", chain.join(" → "))];
+                for hop in hops {
+                    lines.push(format!(
+                        "  ok: {} → {} — {}",
+                        hop.from_agent, hop.to_agent, hop.reason
+                    ));
+                }
+                for skip in skipped_hops {
+                    lines.push(format!(
+                        "  skipped hop {}: {} skipped {} — {}",
+                        skip.hop_index, skip.from_agent, skip.skipped_agent, skip.error
+                    ));
+                }
+                Some(lines.join("
+"))
+            }
+            Self::Handoff {
+                from_agent,
+                to_agent,
+                from_layer,
+                to_layer,
+                reason,
+                ..
+            } => Some(format!(
+                "handoff: {from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {reason}"
+            )),
+            _ => None,
         }
     }
 }

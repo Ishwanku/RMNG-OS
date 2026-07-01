@@ -9,6 +9,7 @@ use rmng_core::{
     PermissionVerdict, RmngConfig, Runtime, SessionStore, socket_path, IntentValidator,
     IntegrationRegistry,
 };
+use rmng_core::OrchestrationSnapshot;
 use rmng_nervous::{
     list_supported_providers,
     load_skill, load_skill_index, run_provider_matrix, AgentRouter,
@@ -221,6 +222,32 @@ fn maybe_persist_session_result(
 }
 
 
+fn print_handoff_outcome(outcome: &RouteOutcome) {
+    if let Some(summary) = outcome.chain_outcome_summary() {
+        println!("{summary}");
+    }
+}
+
+fn print_orchestration_failure_context(session_id: &str) {
+    let store = SessionStore::default_store();
+    let Ok(session) = store.load(session_id) else {
+        return;
+    };
+    let Some(orch) = session.shared_context.get("orchestration") else {
+        return;
+    };
+    let snap = OrchestrationSnapshot::from_value(orch);
+    if snap.has_failures() || snap.status.as_deref() == Some("completed_with_skips") {
+        eprintln!("--- chain recovery context ---");
+        eprintln!("{}", snap.cli_failure_report());
+        let hints = snap.recovery_hints();
+        if !hints.is_empty() {
+            eprintln!("{hints}");
+        }
+        eprintln!("--- end chain context ---");
+    }
+}
+
 async fn ask_with_auto_continue(
     router: &AgentRouter,
     session_id: &str,
@@ -241,35 +268,13 @@ async fn ask_with_auto_continue(
             Ok(o) => o,
             Err(e) => {
                 eprintln!("agent router (step {}): {e}", step + 1);
+                print_orchestration_failure_context(session_id);
                 return 1;
             }
         };
 
         if outcome.is_handoff() {
-            match &outcome {
-                RouteOutcome::HandoffChain { chain, hops, reason, .. } => {
-                    println!("handoff-chain ({reason}): {}", chain.join(" → "));
-                    for hop in hops {
-                        println!(
-                            "  hop: {} → {} — {}",
-                            hop.from_agent, hop.to_agent, hop.reason
-                        );
-                    }
-                }
-                RouteOutcome::Handoff {
-                    from_agent,
-                    to_agent,
-                    from_layer,
-                    to_layer,
-                    reason,
-                    ..
-                } => {
-                    println!(
-                        "handoff: {from_agent} ({from_layer}) → {to_agent} ({to_layer}) — {reason}"
-                    );
-                }
-                _ => {}
-            }
+            print_handoff_outcome(&outcome);
         }
 
         let mut intent = outcome.intent();
@@ -578,6 +583,9 @@ async fn main() {
                     }
                     Err(e) => {
                         eprintln!("agent router: {e}");
+                        if let Some(ref sid) = session {
+                            print_orchestration_failure_context(sid);
+                        }
                         1
                     }
                 }
@@ -683,6 +691,7 @@ async fn main() {
                 }
                 Err(e) => {
                     eprintln!("handoff: {e}");
+                    print_orchestration_failure_context(session.as_str());
                     1
                 }
             }

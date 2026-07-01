@@ -38,6 +38,18 @@ Audit events: `nervous.handoff_chain_policy` (decision), `nervous.handoff_chain_
 
 Session `shared_context.orchestration` gains `hop_decisions[]` and `skipped_hops[]` on recovery paths.
 
+## Chain error recovery (Sprint 25)
+
+Failed and skipped hops are persisted for orchestrator re-planning:
+
+| Field | Purpose |
+|-------|---------|
+| `hop_errors[]` | Structured errors (`hop_index`, `from_agent`, `to_agent`, `error`, `action`) |
+| `error` / `failed_hop` | Terminal failure when policy is `abort` |
+| `skipped_hops[]` | Hops bypassed by `skip` policy |
+
+The orchestrator sees `Chain error recovery` in `prompt_context` and orchestration prompts when status is `failed` or `completed_with_skips`. CLI prints `--- chain recovery context ---` on router/handoff errors.
+
 ## Chain failure behavior
 
 Failed hops set `shared_context.orchestration.status = failed` with `failed_hop`, `error`. Audit: `nervous.handoff_chain_hop` outcome `failed`.

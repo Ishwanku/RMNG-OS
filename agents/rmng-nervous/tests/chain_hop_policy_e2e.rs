@@ -61,6 +61,17 @@ async fn hop_policy_abort_fails_chain_on_injected_hop_error() {
         .and_then(|v| v.as_array());
     assert!(decisions.is_some_and(|d| !d.is_empty()));
 
+    let hop_errors = loaded
+        .shared_context
+        .get("orchestration")
+        .and_then(|v| v.get("hop_errors"))
+        .and_then(|v| v.as_array());
+    assert!(hop_errors.is_some_and(|e| !e.is_empty()));
+
+    let ctx = loaded.prompt_context();
+    assert!(ctx.contains("Chain error recovery"));
+    assert!(ctx.contains("terminal_failure"));
+
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -210,4 +221,34 @@ fn chain_options_from_plan_metadata() {
     let opts = HandoffChainOptions::from_metadata(plan.metadata().unwrap());
     assert_eq!(opts.hop_failure_policy, HopFailurePolicy::Retry);
     assert_eq!(opts.hop_retry_max, 3);
+}
+
+
+#[tokio::test]
+async fn skip_errors_visible_in_orchestrator_prompt_context() {
+    let dir = std::env::temp_dir().join(format!("rmng-ctx-skip-{}", uuid::Uuid::new_v4()));
+    let store = SessionStore::new(&dir);
+    let session = store.create().expect("create");
+    let router = test_router(store.clone());
+
+    router
+        .handoff_chain_with_options(
+            &session.id,
+            &chain_vec(),
+            "__inject_handoff_fail__ skip context",
+            "skip context test",
+            HandoffChainOptions {
+                hop_failure_policy: HopFailurePolicy::Skip,
+                hop_retry_max: 2,
+            },
+        )
+        .await
+        .expect("skip chain");
+
+    let loaded = store.load(&session.id).expect("load");
+    let ctx = loaded.prompt_context();
+    assert!(ctx.contains("skipped_hops") || ctx.contains("skipped hop"));
+    assert!(ctx.contains("completed_with_skips") || ctx.contains("Chain error recovery"));
+
+    let _ = std::fs::remove_dir_all(dir);
 }

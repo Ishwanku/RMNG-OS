@@ -55,7 +55,8 @@ pub use intent::{
     CoreIntent, Intent, IntentKind, Metadata, ToolRequest, CORE_INTENT_SCHEMA_VERSION,
 };
 pub use orchestration::{
-    parse_hop_failure_policy, HandoffChainOptions, HopFailurePolicy,
+    parse_hop_failure_policy, ChainHopError, HandoffChainOptions, HopFailurePolicy,
+    OrchestrationSnapshot,
 };
 
 /// Parse IPC payload as v2 core intent or fall back to v1 intent envelope.

@@ -272,6 +272,7 @@ impl SessionStore {
                 obj.insert("failed_from".into(), serde_json::json!(from_agent));
                 obj.insert("failed_to".into(), serde_json::json!(to_agent));
                 obj.insert("error".into(), serde_json::json!(error));
+                Self::push_hop_error(obj, hop_index, from_agent, to_agent, error, Some("abort"));
             }
         } else {
             session.shared_context.insert(
@@ -282,11 +283,60 @@ impl SessionStore {
                     "failed_from": from_agent,
                     "failed_to": to_agent,
                     "error": error,
+                    "hop_errors": [serde_json::json!({
+                        "hop_index": hop_index,
+                        "from_agent": from_agent,
+                        "to_agent": to_agent,
+                        "error": error,
+                        "action": "abort",
+                    })],
                 }),
             );
         }
         session.updated_at = Utc::now();
         self.save(session)
+    }
+
+    /// Append a structured hop error for orchestrator recovery (Sprint 25).
+    pub fn record_hop_error(
+        &self,
+        session: &mut AgentSession,
+        hop_index: usize,
+        from_agent: &str,
+        to_agent: &str,
+        error: &str,
+        action: Option<&str>,
+    ) -> Result<(), SessionError> {
+        if let Some(orch) = session.shared_context.get_mut("orchestration") {
+            if let Some(obj) = orch.as_object_mut() {
+                Self::push_hop_error(obj, hop_index, from_agent, to_agent, error, action);
+            }
+        }
+        session.updated_at = Utc::now();
+        self.save(session)
+    }
+
+    fn push_hop_error(
+        obj: &mut serde_json::Map<String, serde_json::Value>,
+        hop_index: usize,
+        from_agent: &str,
+        to_agent: &str,
+        error: &str,
+        action: Option<&str>,
+    ) {
+        let entry = serde_json::json!({
+            "hop_index": hop_index,
+            "from_agent": from_agent,
+            "to_agent": to_agent,
+            "error": error,
+            "action": action,
+        });
+        let errors = obj
+            .entry("hop_errors")
+            .or_insert_with(|| serde_json::json!([]));
+        if let Some(arr) = errors.as_array_mut() {
+            arr.push(entry);
+        }
     }
 
     /// Append a hop policy decision to orchestration audit trail (Sprint 25).
@@ -347,6 +397,14 @@ impl SessionStore {
                         "error": error,
                     }));
                 }
+                Self::push_hop_error(
+                    obj,
+                    hop_index,
+                    from_agent,
+                    skipped_agent,
+                    error,
+                    Some("skip"),
+                );
             }
         }
         session.updated_at = Utc::now();
@@ -541,6 +599,11 @@ impl AgentSession {
                 "orchestration_chain: {}",
                 serde_json::to_string(orch).unwrap_or_else(|_| "{}".into())
             ));
+            let snap = crate::orchestration::OrchestrationSnapshot::from_value(orch);
+            let recovery = snap.recovery_hints();
+            if !recovery.is_empty() {
+                parts.push(recovery);
+            }
         }
         if !self.handoff_history.is_empty() {
             let tail: Vec<_> = self.handoff_history.iter().rev().take(5).collect();
