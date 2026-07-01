@@ -1,6 +1,6 @@
 # LLM Providers (Sprint 6+)
 
-> **Configuration guide:** [llm-configuration.md](./llm-configuration.md) — catalog-driven models, profiles, and CLI setup (no rebuild when models change).
+> **Configuration guide:** [llm-configuration.md](./llm-configuration.md) — catalog-driven models, profiles, pricing overrides, budget caps, and CLI setup (no rebuild when models change).
 
 RMNG-OS nervous system uses a **pluggable provider abstraction** in `rmng-nervous/src/providers/`. All providers emit the same v2 `CoreIntent` JSON — the body (`rmngd`) never changes.
 

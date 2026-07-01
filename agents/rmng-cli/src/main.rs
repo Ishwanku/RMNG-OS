@@ -1,3 +1,4 @@
+mod audit_cmd;
 mod llm_cmd;
 mod observe;
 
@@ -9,8 +10,9 @@ use rmng_core::{
     IntegrationRegistry,
 };
 use rmng_nervous::{
-    health_check_detailed, list_supported_providers, load_skill, load_skill_index, run_provider_matrix,
-    AgentRouter, NervousConnector, RouteOutcome,
+    circuit_state_path, health_check_detailed, list_circuit_statuses, list_supported_providers,
+    load_skill, load_skill_index, reload_from_disk, run_provider_matrix, AgentRouter,
+    NervousConnector, RouteOutcome,
 };
 
 #[derive(Parser)]
@@ -85,7 +87,17 @@ enum Commands {
     /// Show runtime status
     Status,
     /// Runtime observability — integrations, agents, audit tail, MCP allowlist
-    Observe,
+    Observe {
+        #[arg(long, help = "LLM cost rollups from audit log (session/agent/daily/weekly)")]
+        cost: bool,
+        #[arg(long, help = "JSON output (best with --cost)")]
+        json: bool,
+    },
+    /// Tamper-evident audit log tools
+    Audit {
+        #[command(subcommand)]
+        action: AuditCommands,
+    },
     /// LLM provider management
     Llm {
         #[command(subcommand)]
@@ -113,6 +125,8 @@ enum LlmCommands {
         specialized: bool,
         #[arg(long, help = "Query provider /models API and compare with catalog")]
         live: bool,
+        #[arg(long, help = "Show input/output $/1M token pricing")]
+        pricing: bool,
     },
     /// Switch active [[llm.profiles]] preset in config
     Use { name: String },
@@ -124,6 +138,17 @@ enum LlmCommands {
         specialized: bool,
         #[arg(long, help = "Merge live-only models into ~/.rmng/llm-catalog.toml")]
         apply: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum AuditCommands {
+    /// Verify audit hash chain integrity (exit 1 if tampered)
+    Verify {
+        #[arg(long, help = "JSON output for CI/cron")]
+        json: bool,
+        #[arg(long, help = "Include LLM cost statistics")]
+        stats: bool,
     },
 }
 
@@ -713,12 +738,16 @@ async fn main() {
             );
             0
         }
-        Commands::Observe => {
-            observe::print_observe().await;
+        Commands::Observe { cost, json } => {
+            observe::print_observe(cost, json).await;
             0
         }
+        Commands::Audit { action } => match action {
+            AuditCommands::Verify { json, stats } => audit_cmd::run_verify(json, stats),
+        },
         Commands::Llm { action } => match action {
             LlmCommands::Health => {
+                reload_from_disk();
                 let connector = NervousConnector::load();
                 match health_check_detailed(connector.config()).await {
                     Ok(r) => {
@@ -731,6 +760,23 @@ async fn main() {
                             println!("endpoint:  {ep}");
                         }
                         println!("detail:    {}", r.detail);
+                        let circuits = list_circuit_statuses();
+                        if circuits.is_empty() {
+                            println!("circuits:  none ({})", circuit_state_path().display());
+                        } else {
+                            println!("circuits:  {} tracked ({})", circuits.len(), circuit_state_path().display());
+                            for c in circuits.iter().filter(|c| c.open) {
+                                println!(
+                                    "  OPEN {} failures={} cooldown={:?}s",
+                                    c.provider_id,
+                                    c.failures,
+                                    c.cooldown_secs_remaining
+                                );
+                            }
+                        }
+                        if let Some(b) = rmng_core::check_budget_from_audit(connector.config()) {
+                            println!("budget:    {}", b.message);
+                        }
                         if r.healthy { 0 } else { 1 }
                     }
                     Err(e) => {
@@ -784,8 +830,9 @@ async fn main() {
                 provider,
                 specialized,
                 live,
+                pricing,
             } => {
-                llm_cmd::print_models(provider.as_deref(), specialized, live);
+                llm_cmd::print_models(provider.as_deref(), specialized, live, pricing);
                 0
             }
             LlmCommands::Use { name } => llm_cmd::run_use(&name),

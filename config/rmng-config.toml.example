@@ -58,6 +58,13 @@ model = "llama3.2"
 # Global LLM fallback chain (Sprint 8) — profile names tried in order after primary fails
 # llm_fallback = ["grok-frontier", "local-ollama"]
 
+# LLM budget governance (Sprint 11) — opt-in warn/deny
+# [llm_budget]
+# daily_usd = 5.0
+# warn_threshold = 0.8
+# deny_threshold = 1.0
+# enforce = "warn"   # off | warn | deny
+
 # Subprocess isolation defaults for MCP tools (Sprint 10)
 [isolation]
 memory_mb = 512

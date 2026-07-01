@@ -1,23 +1,96 @@
 use super::types::ProviderErrorKind;
 use crate::nervous_audit::log_nervous_event;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-#[derive(Debug, Clone)]
-struct CircuitState {
+const STATE_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PersistedCircuitState {
     failures: u32,
-    open_until: Option<Instant>,
+    open_until_unix: Option<u64>,
 }
 
-static BREAKERS: Mutex<Option<HashMap<String, CircuitState>>> = Mutex::new(None);
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct CircuitStateFile {
+    #[serde(default = "default_version")]
+    version: u32,
+    #[serde(default)]
+    providers: HashMap<String, PersistedCircuitState>,
+}
 
-fn map() -> std::sync::MutexGuard<'static, Option<HashMap<String, CircuitState>>> {
+fn default_version() -> u32 {
+    STATE_VERSION
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CircuitStatus {
+    pub provider_id: String,
+    pub failures: u32,
+    pub open: bool,
+    pub open_until_unix: Option<u64>,
+    pub cooldown_secs_remaining: Option<u64>,
+}
+
+static BREAKERS: Mutex<Option<HashMap<String, PersistedCircuitState>>> = Mutex::new(None);
+
+fn state_path() -> PathBuf {
+    if let Ok(home) = std::env::var("HOME") {
+        return PathBuf::from(home).join(".rmng/circuit-state.json");
+    }
+    PathBuf::from("/tmp/rmng/circuit-state.json")
+}
+
+fn now_unix() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+fn load_file() -> CircuitStateFile {
+    let path = state_path();
+    if !path.is_file() {
+        return CircuitStateFile::default();
+    }
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    serde_json::from_str(&raw).unwrap_or_default()
+}
+
+fn save_file(providers: &HashMap<String, PersistedCircuitState>) {
+    let path = state_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let file = CircuitStateFile {
+        version: STATE_VERSION,
+        providers: providers.clone(),
+    };
+    if let Ok(raw) = serde_json::to_string_pretty(&file) {
+        let _ = std::fs::write(path, raw);
+    }
+}
+
+fn map() -> std::sync::MutexGuard<'static, Option<HashMap<String, PersistedCircuitState>>> {
     let mut guard = BREAKERS.lock().expect("circuit breaker lock");
     if guard.is_none() {
-        *guard = Some(HashMap::new());
+        *guard = Some(load_file().providers);
     }
     guard
+}
+
+fn persist(guard: &HashMap<String, PersistedCircuitState>) {
+    save_file(guard);
+}
+
+fn is_open(state: &PersistedCircuitState) -> bool {
+    state
+        .open_until_unix
+        .map(|u| now_unix() < u)
+        .unwrap_or(false)
 }
 
 /// Whether a provider request should be attempted (not circuit-open).
@@ -26,15 +99,16 @@ pub fn allow_request(provider_id: &str) -> bool {
     let Some(states) = guard.as_mut() else {
         return true;
     };
-    let state = states.entry(provider_id.to_string()).or_insert(CircuitState {
+    let state = states.entry(provider_id.to_string()).or_insert(PersistedCircuitState {
         failures: 0,
-        open_until: None,
+        open_until_unix: None,
     });
-    if let Some(until) = state.open_until {
-        if Instant::now() < until {
+    if let Some(until) = state.open_until_unix {
+        if now_unix() < until {
             return false;
         }
-        state.open_until = None;
+        state.open_until_unix = None;
+        persist(states);
         log_nervous_event(
             "nervous.circuit_breaker",
             "half_open",
@@ -50,7 +124,7 @@ pub fn record_success(provider_id: &str) {
         return;
     };
     if let Some(state) = states.get_mut(provider_id) {
-        if state.failures > 0 || state.open_until.is_some() {
+        if state.failures > 0 || state.open_until_unix.is_some() {
             log_nervous_event(
                 "nervous.circuit_breaker",
                 "closed",
@@ -58,7 +132,8 @@ pub fn record_success(provider_id: &str) {
             );
         }
         state.failures = 0;
-        state.open_until = None;
+        state.open_until_unix = None;
+        persist(states);
     }
 }
 
@@ -74,36 +149,80 @@ pub fn record_failure(provider_id: &str, kind: ProviderErrorKind) {
     let Some(states) = guard.as_mut() else {
         return;
     };
-    let state = states.entry(provider_id.to_string()).or_insert(CircuitState {
-        failures: 0,
-        open_until: None,
-    });
-    state.failures = state.failures.saturating_add(1);
-    let secs = (30u64).saturating_mul(1u64 << state.failures.min(4));
-    let cooldown = Duration::from_secs(secs.min(300));
-    state.open_until = Some(Instant::now() + cooldown);
+    let (failures, cooldown_secs) = {
+        let state = states.entry(provider_id.to_string()).or_insert(PersistedCircuitState {
+            failures: 0,
+            open_until_unix: None,
+        });
+        state.failures = state.failures.saturating_add(1);
+        let failures = state.failures;
+        let secs = (30u64).saturating_mul(1u64 << failures.min(4));
+        let cooldown = Duration::from_secs(secs.min(300));
+        state.open_until_unix = Some(now_unix() + cooldown.as_secs());
+        (failures, cooldown.as_secs())
+    };
+    persist(states);
     log_nervous_event(
         "nervous.circuit_breaker",
         "open",
         Some(&format!(
-            "provider={provider_id} kind={kind:?} failures={} cooldown_secs={}",
-            state.failures,
-            cooldown.as_secs()
+            "provider={provider_id} kind={kind:?} failures={failures} cooldown_secs={cooldown_secs}"
         )),
     );
+}
+
+/// Snapshot all circuit breaker states (Sprint 11 — for observe / health).
+pub fn list_circuit_statuses() -> Vec<CircuitStatus> {
+    let guard = map();
+    let Some(states) = guard.as_ref() else {
+        return Vec::new();
+    };
+    let now = now_unix();
+    let mut out: Vec<CircuitStatus> = states
+        .iter()
+        .map(|(id, st)| {
+            let open = is_open(st);
+            let remaining = st.open_until_unix.and_then(|u| u.checked_sub(now));
+            CircuitStatus {
+                provider_id: id.clone(),
+                failures: st.failures,
+                open,
+                open_until_unix: st.open_until_unix,
+                cooldown_secs_remaining: remaining,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| a.provider_id.cmp(&b.provider_id));
+    out
+}
+
+pub fn circuit_state_path() -> PathBuf {
+    state_path()
+}
+
+/// Force reload from disk (tests / multi-process rmngd).
+pub fn reload_from_disk() {
+    let mut guard = BREAKERS.lock().expect("circuit breaker lock");
+    *guard = Some(load_file().providers);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
 
     #[test]
     fn opens_after_rate_limit_failure() {
+        let dir = env::temp_dir().join(format!("rmng-cb-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        env::set_var("HOME", dir.to_str().unwrap());
+        *BREAKERS.lock().unwrap() = None;
         let id = format!("test-provider-{}", uuid::Uuid::new_v4());
         assert!(allow_request(&id));
         record_failure(&id, ProviderErrorKind::RateLimit);
         assert!(!allow_request(&id));
         record_success(&id);
         assert!(allow_request(&id));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

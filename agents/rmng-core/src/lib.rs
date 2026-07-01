@@ -2,7 +2,9 @@
 
 pub mod allowlist;
 pub mod audit;
+pub mod budget;
 pub mod config;
+pub mod cost_rollup;
 pub mod dispatch;
 pub mod error;
 pub mod intent;
@@ -28,10 +30,12 @@ pub use session::{
     ToolResultRecord, DEFAULT_SESSION_TTL_DAYS, MAX_TOOL_OUTPUT_LEN,
 };
 pub use validator::IntentValidator;
+pub use budget::{check_budget, check_budget_from_audit, spent_today_usd, BudgetCheckResult, BudgetLevel};
 pub use config::{
-    parse_provider_str, AgentLlmOverride, LlmConfig, LlmConfigEntry, LlmProfile, LlmProvider,
-    LlmProviderKind, RmngConfig,
+    parse_provider_str, AgentLlmOverride, BudgetEnforceMode, LlmBudgetConfig, LlmConfig,
+    LlmConfigEntry, LlmProfile, LlmProvider, LlmProviderKind, RmngConfig,
 };
+pub use cost_rollup::{rollup_llm_costs, rollup_recent_days, CostRollupReport, EntityCost, PeriodCost};
 pub use dispatch::Runtime;
 pub use error::RmngError;
 pub use intent::{

@@ -48,6 +48,15 @@ pub fn log_llm_telemetry(
     append_entry(&entry);
 }
 
+/// Budget / governance events (Sprint 11).
+pub fn log_system_event(action: &str, outcome: &str, detail: Option<&str>) {
+    let mut entry = AuditEntry::new(action, outcome);
+    entry.category = Some(AuditCategory::System);
+    entry.track = Some(AuditTrack::Plan);
+    entry.detail = detail.map(str::to_string);
+    append_entry(&entry);
+}
+
 fn append_entry(entry: &AuditEntry) {
     let log = AuditLog::new(AuditLog::default_path());
     if let Err(e) = log.append(entry) {

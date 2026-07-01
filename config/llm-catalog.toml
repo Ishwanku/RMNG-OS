@@ -23,6 +23,8 @@ id = "gemini-3.5-flash"
 tier = "3.x"
 description = "Default production — fast agentic workflows, near-Pro intelligence"
 default = true
+input_cost_per_m = 0.10
+output_cost_per_m = 0.40
 
 [[providers.google.models]]
 id = "gemini-3.1-pro-preview"
@@ -176,6 +178,8 @@ id = "llama-3.3-70b-versatile"
 tier = "production"
 description = "Default fast inference"
 default = true
+input_cost_per_m = 0.59
+output_cost_per_m = 0.79
 
 [[providers.groq.models]]
 id = "llama-3.1-8b-instant"

@@ -152,6 +152,19 @@ Split licensing: **Proprietary** for core runtime + scripts/docs/config; **GPLv2
 - Interface version enforcement at nervous→body boundary
 
 - ✅ Full record: [docs/decisions/ADR-020-linux-aligned-runtime-hardening.md](decisions/ADR-020-linux-aligned-runtime-hardening.md)
+
+## ADR-021: Cost governance & operational control
+
+**Status:** **Accepted** (Sprint 11)
+
+- Editable catalog pricing (`input_cost_per_m` / `output_cost_per_m`)
+- `rmng observe --cost` rollups + JSON export
+- Persistent circuit breaker (`~/.rmng/circuit-state.json`)
+- Opt-in budget warn/deny (`[llm_budget]` in config)
+- `rmng audit verify` for CI/cron integrity checks
+
+- ✅ Full record: [docs/decisions/ADR-021-cost-governance.md](decisions/ADR-021-cost-governance.md)
+
 - ✅ ADR-007 superseded
 - ⚠️ Update Cargo.toml workspace license metadata manually
 - ⚠️ Consider private repo if source confidentiality is required

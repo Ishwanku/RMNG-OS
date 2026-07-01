@@ -24,6 +24,12 @@ pub struct ModelEntry {
     pub default: bool,
     #[serde(default)]
     pub specialized: bool,
+    /// USD per 1M input tokens (Sprint 11 — editable in ~/.rmng/llm-catalog.toml).
+    #[serde(default)]
+    pub input_cost_per_m: Option<f64>,
+    /// USD per 1M output tokens.
+    #[serde(default)]
+    pub output_cost_per_m: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -163,6 +169,16 @@ pub fn list_catalog_models(provider: LlmProvider, include_specialized: bool) -> 
         .unwrap_or_default()
 }
 
+/// Lookup per-model pricing from the user/repo catalog (Sprint 11).
+pub fn catalog_model_pricing(provider_key: &str, model_id: &str) -> Option<(f64, f64)> {
+    let entry = load_catalog().file.providers.get(provider_key)?;
+    let model = entry.models.iter().find(|m| m.id == model_id)?;
+    match (model.input_cost_per_m, model.output_cost_per_m) {
+        (Some(i), Some(o)) => Some((i, o)),
+        _ => None,
+    }
+}
+
 pub fn list_all_providers() -> Vec<(String, ProviderEntry)> {
     let mut out: Vec<_> = load_catalog()
         .file
@@ -207,6 +223,8 @@ pub fn apply_live_models(provider_key: &str, live_only: &[String]) -> Result<(Pa
             description: Some("Added by rmng llm sync-catalog --apply".into()),
             default: false,
             specialized: false,
+            input_cost_per_m: None,
+            output_cost_per_m: None,
         });
         added.push(id.clone());
     }

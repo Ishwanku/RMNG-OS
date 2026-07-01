@@ -161,12 +161,56 @@ Every successful LLM call records:
 | Field | Source |
 |-------|--------|
 | `prompt_tokens` / `completion_tokens` | Provider response (`usage` / `usageMetadata`) |
-| `estimated_cost_usd` | Heuristic from model name when provider omits billing |
+| `estimated_cost_usd` | Catalog pricing → heuristic when provider omits billing |
 | `fallback_index` | 0 = primary profile, 1+ = fallback used |
 
 Telemetry is stored in session `llm_calls` (when `--session` is active) and appended to `~/.rmng/logs/audit.jsonl` as `nervous.llm_call` (always, including session-less `rmng ask`).
 
 `rmng observe` shows per-call tokens/cost and session totals (Σ tokens, estimated cost).
+
+## Editable pricing (Sprint 11)
+
+Override or define per-model rates in `~/.rmng/llm-catalog.toml`:
+
+```toml
+[[providers.groq.models]]
+id = "llama-3.3-70b-versatile"
+input_cost_per_m = 0.59
+output_cost_per_m = 0.79
+```
+
+Query pricing:
+
+```bash
+rmng llm models --provider groq --pricing
+```
+
+Cost estimation uses catalog rates first, then built-in heuristics (`cost_source`: `catalog` | `estimate` | `local`).
+
+## Cost rollups & budget (Sprint 11)
+
+```bash
+rmng observe --cost              # session/agent/daily/weekly rollups
+rmng observe --cost --json       # export for dashboards/scripts
+rmng llm health                  # includes budget + circuit breaker state
+rmng audit verify                # integrity check (exit 1 if tampered)
+rmng audit verify --stats        # + LLM cost summary
+rmng audit verify --json         # CI/cron friendly
+```
+
+Budget caps in `~/.rmng/config.toml` (opt-in):
+
+```toml
+[llm_budget]
+daily_usd = 5.0
+warn_threshold = 0.8    # warn at 80% of daily_usd
+deny_threshold = 1.0    # block new LLM calls at 100% when enforce = "deny"
+enforce = "warn"        # off | warn | deny
+```
+
+When thresholds are crossed, `AuditCategory::system` events (`nervous.budget_warn`, `nervous.budget_deny`) are appended to the audit log.
+
+Circuit breaker state persists in `~/.rmng/circuit-state.json` across `rmngd` restarts.
 
 ## Handoff pre-validation (Sprint 8)
 
@@ -195,7 +239,7 @@ OpenAI-compatible providers honor all three; others use provider defaults where 
 ```bash
 rmng llm show
 rmng llm providers
-rmng llm models [--provider google] [--specialized] [--live]
+rmng llm models [--provider google] [--specialized] [--live] [--pricing]
 rmng llm use <profile>
 rmng llm setup
 rmng llm health
@@ -205,6 +249,6 @@ rmng llm sync-catalog [--specialized] [--apply]
 
 `sync-catalog` defaults to dry-run (diff only). `--apply` merges live-only model ids into `~/.rmng/llm-catalog.toml` (run `rmng llm setup` first).
 
-`rmng observe` shows global fallback chain, per-session LLM calls (tokens, cost, latency), and session aggregates.
+`rmng observe` shows global fallback chain, per-session LLM calls (tokens, cost, latency), session aggregates, circuit breakers, and budget status. Use `--cost` for audit-based rollups.
 
 See also: [llm-providers.md](./llm-providers.md), [llm-provider-matrix.md](./llm-provider-matrix.md).

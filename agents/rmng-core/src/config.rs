@@ -160,6 +160,31 @@ pub struct LlmConfigEntry {
     pub config: LlmConfig,
 }
 
+/// LLM spend governance (Sprint 11) — opt-in warn/deny thresholds.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum BudgetEnforceMode {
+    #[default]
+    Off,
+    Warn,
+    Deny,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LlmBudgetConfig {
+    /// Daily USD cap (global). Omit to disable budget checks.
+    #[serde(default)]
+    pub daily_usd: Option<f64>,
+    /// Fraction of daily_usd to emit warn (default 0.8).
+    #[serde(default)]
+    pub warn_threshold: Option<f64>,
+    /// Fraction of daily_usd to block new calls when enforce=deny (default 1.0).
+    #[serde(default)]
+    pub deny_threshold: Option<f64>,
+    #[serde(default)]
+    pub enforce: BudgetEnforceMode,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RmngConfig {
     #[serde(default)]
@@ -174,6 +199,9 @@ pub struct RmngConfig {
     /// Default subprocess isolation for MCP tools (Sprint 10).
     #[serde(default)]
     pub isolation: IsolationLimits,
+    /// LLM budget caps and enforcement (Sprint 11).
+    #[serde(default)]
+    pub llm_budget: LlmBudgetConfig,
 }
 
 impl RmngConfig {

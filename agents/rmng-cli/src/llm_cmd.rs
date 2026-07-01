@@ -1,7 +1,8 @@
 use rmng_core::{parse_provider_str, LlmProviderKind, RmngConfig};
 use rmng_nervous::{
     apply_live_models, catalog_path, compare_models, default_model, install_user_catalog,
-    list_all_providers, list_catalog_models, load_catalog, resolve_api_key, user_catalog_path,
+    list_all_providers, list_catalog_models, load_catalog, provider_id, resolve_api_key,
+    resolve_model_pricing, user_catalog_path,
 };
 
 pub fn print_show() {
@@ -67,7 +68,12 @@ pub fn print_providers() {
     }
 }
 
-pub fn print_models(provider: Option<&str>, include_specialized: bool, live: bool) {
+pub fn print_models(
+    provider: Option<&str>,
+    include_specialized: bool,
+    live: bool,
+    pricing: bool,
+) {
     let prov = match provider {
         Some(s) => parse_provider_str(s).unwrap_or_else(|e| {
             eprintln!("{e}");
@@ -77,7 +83,7 @@ pub fn print_models(provider: Option<&str>, include_specialized: bool, live: boo
     };
 
     if live {
-        print_models_live(prov, include_specialized);
+        print_models_live(prov, include_specialized, pricing);
         return;
     }
 
@@ -86,13 +92,25 @@ pub fn print_models(provider: Option<&str>, include_specialized: bool, live: boo
         println!("No catalog models for {prov:?}");
         return;
     }
+    let prov_key = provider_id(prov);
     println!("Models for {:?} (catalog):", prov);
+    if pricing {
+        println!("  {:<36} {:>12} {:>12}  source", "model", "in$/1M", "out$/1M");
+    }
     for m in models {
-        print_catalog_entry(&m);
+        print_catalog_entry(&m, prov_key, pricing);
     }
 }
 
-fn print_catalog_entry(m: &rmng_nervous::ModelEntry) {
+fn print_catalog_entry(m: &rmng_nervous::ModelEntry, prov_key: &str, pricing: bool) {
+    if pricing {
+        let (in_rate, out_rate, source) = pricing_line(prov_key, m);
+        println!(
+            "  {:<36} ${:>10.4} ${:>10.4}  {source}",
+            m.id, in_rate, out_rate
+        );
+        return;
+    }
     let tags = [
         if m.default { Some("default") } else { None },
         if m.specialized { Some("specialized") } else { None },
@@ -106,7 +124,14 @@ fn print_catalog_entry(m: &rmng_nervous::ModelEntry) {
     println!("  {:<36} [{tags}] {desc}", m.id);
 }
 
-fn print_models_live(prov: LlmProviderKind, include_specialized: bool) {
+fn pricing_line(prov_key: &str, m: &rmng_nervous::ModelEntry) -> (f64, f64, &'static str) {
+    if let (Some(i), Some(o)) = (m.input_cost_per_m, m.output_cost_per_m) {
+        return (i, o, "catalog");
+    }
+    resolve_model_pricing(prov_key, &m.id)
+}
+
+fn print_models_live(prov: LlmProviderKind, include_specialized: bool, pricing: bool) {
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     match rt.block_on(compare_models(prov, include_specialized)) {
         Ok(report) => {
@@ -127,8 +152,12 @@ fn print_models_live(prov: LlmProviderKind, include_specialized: bool) {
             }
             println!();
             println!("-- catalog --");
+            let prov_key = provider_id(prov);
+            if pricing {
+                println!("  {:<36} {:>12} {:>12}  source", "model", "in$/1M", "out$/1M");
+            }
             for m in list_catalog_models(prov, include_specialized) {
-                print_catalog_entry(&m);
+                print_catalog_entry(&m, prov_key, pricing);
             }
             if !report.catalog_only.is_empty() {
                 println!();

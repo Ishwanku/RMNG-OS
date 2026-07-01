@@ -1183,6 +1183,7 @@ dependencies = [
  "clap",
  "rmng-core",
  "rmng-nervous",
+ "serde",
  "serde_json",
  "tokio",
  "toml",

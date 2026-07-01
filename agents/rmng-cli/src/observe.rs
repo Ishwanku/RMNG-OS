@@ -1,5 +1,6 @@
 use rmng_core::{
-    AuditCategory, AuditLog, AuditTrack, IntegrationRegistry, PermissionGate, RmngConfig,
+    check_budget_from_audit, rollup_llm_costs, rollup_recent_days, AuditCategory, AuditLog,
+    AuditTrack, BudgetEnforceMode, IntegrationRegistry, PermissionGate, RmngConfig,
     AUDIT_SCHEMA_VERSION,
 };
 
@@ -11,11 +12,48 @@ fn audit_track_label(t: AuditTrack) -> String {
     }
 }
 use rmng_core::SessionStore;
-use rmng_nervous::{health_check_detailed, load_skill_index, AgentRegistry, NervousConnector};
+use rmng_nervous::{
+    circuit_state_path, health_check_detailed, list_circuit_statuses, load_skill_index,
+    reload_from_disk, AgentRegistry, NervousConnector,
+};
+use serde::Serialize;
 
 const AUDIT_TAIL: usize = 8;
 
-pub async fn print_observe() {
+#[derive(Serialize)]
+struct ObserveCostJson {
+    cost_rollup: rmng_core::CostRollupReport,
+    spent_last_7d_usd: f64,
+    budget: Option<rmng_core::BudgetCheckResult>,
+    circuit_breakers: Vec<rmng_nervous::CircuitStatus>,
+}
+
+pub async fn print_observe(cost_only: bool, json: bool) {
+    reload_from_disk();
+    let audit_log = AuditLog::new(AuditLog::default_path());
+    let entries = audit_log.read_all().unwrap_or_default();
+
+    if cost_only || json {
+        let rollup = rollup_llm_costs(&entries);
+        let spent_7d = rollup_recent_days(&entries, 7);
+        let budget = check_budget_from_audit(&RmngConfig::load());
+        let circuits = list_circuit_statuses();
+        if json {
+            let out = ObserveCostJson {
+                cost_rollup: rollup,
+                spent_last_7d_usd: spent_7d,
+                budget,
+                circuit_breakers: circuits,
+            };
+            println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+            return;
+        }
+        print_cost_rollups(&rollup, spent_7d, budget.as_ref(), &circuits);
+        if cost_only {
+            return;
+        }
+    }
+
     println!("=== RMNG observe ===");
     println!();
 
@@ -53,6 +91,40 @@ pub async fn print_observe() {
         );
     } else {
         println!("isolation:   disabled (set [isolation] in config.toml)");
+    }
+    let budget_cfg = &cfg.llm_budget;
+    if budget_cfg.enforce != BudgetEnforceMode::Off {
+        if let Some(b) = check_budget_from_audit(&cfg) {
+            println!(
+                "llm budget:  {:?} — {}",
+                budget_cfg.enforce,
+                b.message
+            );
+        }
+    } else if budget_cfg.daily_usd.is_some() {
+        println!("llm budget:  configured (enforce=off)");
+    }
+    reload_from_disk();
+    let circuits = list_circuit_statuses();
+    let open: Vec<_> = circuits.iter().filter(|c| c.open).collect();
+    if open.is_empty() {
+        println!(
+            "circuits:    {} provider(s) tracked ({})",
+            circuits.len(),
+            circuit_state_path().display()
+        );
+    } else {
+        println!("circuits:    {} OPEN —", open.len());
+        for c in open {
+            let rem = c
+                .cooldown_secs_remaining
+                .map(|s| format!("{s}s remaining"))
+                .unwrap_or_else(|| "open".into());
+            println!(
+                "  {} failures={} {rem}",
+                c.provider_id, c.failures
+            );
+        }
     }
     println!();
 
@@ -231,7 +303,6 @@ pub async fn print_observe() {
     let cfg = RmngConfig::load();
     let _ = cfg;
 
-    let audit_log = AuditLog::new(AuditLog::default_path());
     let audit_path = audit_log.path();
     println!("-- audit chain (schema v{AUDIT_SCHEMA_VERSION}) --");
     match audit_log.verify_chain() {
@@ -299,6 +370,75 @@ pub async fn print_observe() {
             }
         }
         Err(e) => println!("  ERROR: {e}"),
+    }
+}
+
+fn print_cost_rollups(
+    rollup: &rmng_core::CostRollupReport,
+    spent_7d: f64,
+    budget: Option<&rmng_core::BudgetCheckResult>,
+    circuits: &[rmng_nervous::CircuitStatus],
+) {
+    println!("=== RMNG observe --cost ===");
+    println!();
+    println!(
+        "total:       ${:.4} ({} LLM calls)",
+        rollup.total_cost_usd, rollup.total_llm_calls
+    );
+    println!("last 7d:     ${spent_7d:.4}");
+    if let Some(b) = budget {
+        println!("today:       {}", b.message);
+    }
+    if !rollup.daily.is_empty() {
+        println!();
+        println!("-- daily --");
+        for d in &rollup.daily {
+            println!(
+                "  {}  ${:.4}  {} calls",
+                d.period, d.cost_usd, d.llm_calls
+            );
+        }
+    }
+    if !rollup.weekly.is_empty() {
+        println!();
+        println!("-- weekly --");
+        for w in &rollup.weekly {
+            println!(
+                "  {}  ${:.4}  {} calls",
+                w.period, w.cost_usd, w.llm_calls
+            );
+        }
+    }
+    if !rollup.by_session.is_empty() {
+        println!();
+        println!("-- by session --");
+        for (sid, v) in rollup.by_session.iter().take(10) {
+            println!(
+                "  {sid}  ${:.4}  {} calls  tokens={}+{}",
+                v.cost_usd,
+                v.llm_calls,
+                v.tokens_prompt,
+                v.tokens_completion
+            );
+        }
+    }
+    if !rollup.by_agent.is_empty() {
+        println!();
+        println!("-- by agent --");
+        for (aid, v) in rollup.by_agent.iter().take(10) {
+            println!(
+                "  {aid}  ${:.4}  {} calls",
+                v.cost_usd, v.llm_calls
+            );
+        }
+    }
+    let open: Vec<_> = circuits.iter().filter(|c| c.open).collect();
+    if !open.is_empty() {
+        println!();
+        println!("-- circuit breakers (open) --");
+        for c in open {
+            println!("  {} failures={}", c.provider_id, c.failures);
+        }
     }
 }
 

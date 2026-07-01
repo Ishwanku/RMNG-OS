@@ -270,6 +270,26 @@ impl AuditLog {
         })
     }
 
+    /// Read all entries in file order.
+    pub fn read_all(&self) -> std::io::Result<Vec<AuditEntry>> {
+        if !self.path.is_file() {
+            return Ok(Vec::new());
+        }
+        let file = File::open(&self.path)?;
+        let reader = BufReader::new(file);
+        let mut out = Vec::new();
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            if let Ok(entry) = serde_json::from_str(&line) {
+                out.push(entry);
+            }
+        }
+        Ok(out)
+    }
+
     /// Read recent entries (newest last in returned vec).
     pub fn tail(&self, n: usize) -> std::io::Result<Vec<AuditEntry>> {
         if !self.path.is_file() {

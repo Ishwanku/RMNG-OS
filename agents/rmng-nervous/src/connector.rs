@@ -1,7 +1,7 @@
 use crate::agent::AgentDefinition;
 use crate::chain::run_fallback_chain;
 use crate::mock::mock_core_intent;
-use crate::nervous_audit::{log_llm_telemetry, log_nervous_event};
+use crate::nervous_audit::{log_llm_telemetry, log_nervous_event, log_system_event};
 use crate::providers::{
     allow_request, default_model, provider_label, record_failure, record_success, LlmBackend,
     LlmReasonContext, LlmUsage, ProviderError,
@@ -9,7 +9,7 @@ use crate::providers::{
 use crate::skill::{assemble_prompt_full, AgentSkill};
 use rmng_core::session::{LlmCallRecord, SessionStore};
 use rmng_core::AgentSession;
-use rmng_core::{CoreIntent, RmngConfig};
+use rmng_core::{check_budget_from_audit, BudgetLevel, CoreIntent, RmngConfig};
 use std::time::Instant;
 
 #[derive(Debug, thiserror::Error)]
@@ -100,6 +100,27 @@ impl NervousConnector {
                 agent,
                 session,
             ));
+        }
+
+        if let Some(budget) = check_budget_from_audit(&self.config) {
+            if budget.level == BudgetLevel::Warn {
+                log_system_event(
+                    "nervous.budget_warn",
+                    "warn",
+                    Some(&budget.message),
+                );
+            }
+            if !budget.allowed {
+                log_system_event(
+                    "nervous.budget_deny",
+                    "denied",
+                    Some(&budget.message),
+                );
+                return Err(ConnectorError::Misconfigured(format!(
+                    "LLM budget exceeded: {}",
+                    budget.message
+                )));
+            }
         }
 
         let chain_len = chain.len();
