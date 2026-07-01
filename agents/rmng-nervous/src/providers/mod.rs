@@ -3,6 +3,7 @@
 mod anthropic;
 mod catalog;
 mod defaults;
+mod discovery;
 mod factory;
 mod google;
 mod matrix;
@@ -17,6 +18,7 @@ pub use catalog::{
     catalog_path, install_user_catalog, list_all_providers, list_catalog_models, load_catalog,
     ModelEntry, ProviderEntry,
 };
+pub use discovery::{compare_models, fetch_live_models, ModelSyncReport};
 pub use defaults::{
     default_api_key_env, default_endpoint, default_model, provider_label, resolve_api_key,
 };
@@ -26,4 +28,7 @@ pub use google::GoogleProvider;
 pub use ollama::OllamaProvider;
 pub use openai_compat::OpenAiCompatProvider;
 pub use prompt::build_reasoning_prompt;
-pub use types::{parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, ProviderError};
+pub use types::{
+    parse_core_intent, LlmReasonContext, LlmRequest, LlmResponse, ProviderError,
+    ProviderErrorKind,
+};

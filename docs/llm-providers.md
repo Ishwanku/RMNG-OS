@@ -134,12 +134,15 @@ api_key_env_var = "RMNG_LLM_API_KEY"
 - Rotate keys immediately if exposed in chat, logs, or CI output.
 - `rmng llm health` reports `key_set` without printing the key value.
 
-## Sprint 6 reliability features
+## Sprint 6–7 reliability features
 
-- **Auto-retry**: invalid JSON from the model triggers one repair prompt; logged as `nervous.llm_retry` in `~/.rmng/logs/audit.jsonl`.
-- **Autonomous handoff**: LLM may set `metadata.handoff_to` (agent id); router auto-handoffs when a session is active.
+- **Auto-retry**: invalid JSON from the model triggers one repair prompt (with backoff); logged as `nervous.llm_retry` in `~/.rmng/logs/audit.jsonl`.
+- **Autonomous handoff**: LLM may set `metadata.handoff_to` (single agent) or `metadata.handoff_chain` (ordered multi-hop); router executes when a session is active.
+- **Per-agent LLM**: `llm_profile`, `llm_provider`, or `model` in `agents/definitions/*.yaml` — see [llm-configuration.md](./llm-configuration.md).
+- **Live model discovery**: `rmng llm models --live` queries provider APIs and warns on catalog drift.
+- **Error classification**: health/matrix report `InvalidKey`, `Billing`, `ModelNotFound`, `RateLimit`, etc.
 - **Rate limits**: 429 responses retry with exponential backoff.
-- **Provider matrix**: `rmng llm matrix` or `./scripts/llm-provider-matrix.sh`.
+- **Provider matrix**: `rmng llm matrix` (Grok, OpenAI, Groq, Google, Anthropic, Together, Fireworks, DeepSeek, NVIDIA NIM, Ollama).
 
 See also: [llm-provider-matrix.md](./llm-provider-matrix.md).
 
@@ -149,6 +152,7 @@ See also: [llm-provider-matrix.md](./llm-provider-matrix.md).
 rmng llm show      # active config + catalog path
 rmng llm providers # catalog-driven provider list
 rmng llm models --provider google
+rmng llm models --live --provider groq
 rmng llm use <profile>
 rmng llm setup     # install catalog to ~/.rmng/
 rmng llm health

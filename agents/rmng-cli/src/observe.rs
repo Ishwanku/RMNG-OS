@@ -32,6 +32,12 @@ pub async fn print_observe() {
             r.provider_id, r.model, r.api_key_set, r.detail
         );
     }
+    if !cfg.llm_fallback.is_empty() {
+        println!(
+            "llm fallback: global chain → {}",
+            cfg.llm_fallback.join(" → ")
+        );
+    }
     println!();
 
     let daemon_up = rmng_core::daemon_running();
@@ -98,11 +104,29 @@ pub async fn print_observe() {
             for id in ids.iter().take(5) {
                 if let Ok(s) = session_store.load(id) {
                     println!(
-                        "  {} — handoffs: {}, active layers: {}",
+                        "  {} — handoffs: {}, active layers: {}, llm calls: {}",
                         id,
                         s.handoff_history.len(),
-                        s.active_agents.len()
+                        s.active_agents.len(),
+                        s.llm_calls.len()
                     );
+                    for call in s.llm_calls.iter().rev().take(3) {
+                        let agent = call.agent_id.as_deref().unwrap_or("-");
+                        let tokens = match (call.prompt_tokens, call.completion_tokens) {
+                            (Some(p), Some(c)) => format!("tokens={p}+{c}"),
+                            _ => "tokens=-".into(),
+                        };
+                        println!(
+                            "      {} {} [{}] {} {} {}ms",
+                            call.timestamp.format("%H:%M:%S"),
+                            agent,
+                            call.profile_label,
+                            call.provider,
+                            call.model,
+                            call.latency_ms
+                        );
+                        println!("        {tokens}");
+                    }
                 }
             }
         }

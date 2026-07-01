@@ -111,11 +111,18 @@ enum LlmCommands {
         provider: Option<String>,
         #[arg(long, help = "Include image/audio/embedding models")]
         specialized: bool,
+        #[arg(long, help = "Query provider /models API and compare with catalog")]
+        live: bool,
     },
     /// Switch active [[llm.profiles]] preset in config
     Use { name: String },
     /// Copy repo catalog to ~/.rmng/llm-catalog.toml
     Setup,
+    /// Compare live provider APIs against local catalog (drift report)
+    SyncCatalog {
+        #[arg(long, help = "Include specialized models in comparison")]
+        specialized: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -774,12 +781,14 @@ async fn main() {
             LlmCommands::Models {
                 provider,
                 specialized,
+                live,
             } => {
-                llm_cmd::print_models(provider.as_deref(), specialized);
+                llm_cmd::print_models(provider.as_deref(), specialized, live);
                 0
             }
             LlmCommands::Use { name } => llm_cmd::run_use(&name),
             LlmCommands::Setup => llm_cmd::run_setup(),
+            LlmCommands::SyncCatalog { specialized } => llm_cmd::run_sync_catalog(specialized),
         }
     };
     if code != 0 {

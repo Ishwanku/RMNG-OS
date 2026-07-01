@@ -5,6 +5,8 @@ Example intents (emit exactly one JSON object):
 {"action":"tool.execute","target":"git.status","parameters":{},"metadata":{"session_id":"<sid>"}}
 {"action":"mcp.proxy","mcp_server":"github","mcp_tool":"search_issues","mcp_args":{"query":"repo:Ishwanku/RMNG-OS is:open"},"metadata":{"session_id":"<sid>"}}
 {"action":"plan.only","reasoning":"Task complete. Summarize prior tool results.","metadata":{"session_id":"<sid>"}}
+{"action":"plan.only","reasoning":"Delegate via chain.","metadata":{"session_id":"<sid>","handoff_chain":["swarm-coordinator","repo-keeper","runtime-executor"]}}
+{"action":"plan.only","reasoning":"Delegate to specialist.","metadata":{"session_id":"<sid>","handoff_to":"repo-keeper"}}
 "#;
 
 /// Build the final prompt sent to any LLM provider (shared across adapters).

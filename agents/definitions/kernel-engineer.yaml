@@ -12,3 +12,5 @@ allowed_native_tools:
   - kernel.apply_patches
 allowed_mcp_tools: []
 delegates_to: []
+# Deep reasoning for kernel work (profile from ~/.rmng/config.toml)
+llm_profile: gemini-reasoning

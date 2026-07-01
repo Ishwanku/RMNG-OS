@@ -13,3 +13,9 @@ delegates_to:
   - kernel-engineer
   - system-health
   - runtime-executor
+# Fast model for L4 orchestration (override global [llm] via named profile)
+llm_profile: groq-fast
+# If Groq rate-limits, try these profiles in order (Sprint 8)
+llm_fallback:
+  - grok-frontier
+  - local-ollama

@@ -65,7 +65,15 @@ impl LlmBackend {
                     })?;
                 let id = provider_label(cfg.llm_provider);
                 Ok(Some(Self::OpenAiCompat(OpenAiCompatProvider::new(
-                    id, url, api_key, model, timeout, retries,
+                    id,
+                    url,
+                    api_key,
+                    model,
+                    timeout,
+                    retries,
+                    cfg.temperature,
+                    cfg.max_tokens,
+                    cfg.top_p,
                 ))))
             }
             LlmProvider::Anthropic => {
@@ -203,10 +211,10 @@ pub async fn health_check_detailed(cfg: &RmngConfig) -> Result<HealthReport, Pro
                 ),
                 Ok(true) => (true, "endpoint reachable".into()),
                 Ok(false) => (false, "health probe returned false".into()),
-                Err(ProviderError::Api { status, message, .. }) => {
-                    (false, format!("API {status}: {message}"))
+                Err(ref e @ ProviderError::Api { status, ref message, .. }) => {
+                    (false, format!("API {status} [{:?}]: {message}", e.kind()))
                 }
-                Err(e) => (false, format!("health probe failed: {e}")),
+                Err(e) => (false, format!("health probe failed [{:?}]: {e}", e.kind())),
             };
             Ok(HealthReport {
                 provider_id: b.id().to_string(),

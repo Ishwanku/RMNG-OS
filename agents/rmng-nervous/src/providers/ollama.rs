@@ -58,6 +58,34 @@ impl OllamaProvider {
         Ok(self.client.get(&url).send().await?.status().is_success())
     }
 
+    pub async fn list_models(&self) -> Result<Vec<String>, ProviderError> {
+        let url = format!("{}/api/tags", self.base_url.trim_end_matches('/'));
+        let resp = self.client.get(&url).send().await?;
+        let status = resp.status();
+        if !status.is_success() {
+            let message = resp.text().await.unwrap_or_default();
+            return Err(ProviderError::api("ollama", status.as_u16(), &message));
+        }
+        #[derive(Deserialize)]
+        struct TagsResponse {
+            models: Option<Vec<TagEntry>>,
+        }
+        #[derive(Deserialize)]
+        struct TagEntry {
+            name: String,
+        }
+        let parsed: TagsResponse = resp.json().await?;
+        let mut ids: Vec<String> = parsed
+            .models
+            .unwrap_or_default()
+            .into_iter()
+            .map(|m| m.name.split(':').next().unwrap_or(&m.name).to_string())
+            .collect();
+        ids.sort();
+        ids.dedup();
+        Ok(ids)
+    }
+
     pub async fn complete(&self, req: LlmRequest<'_>) -> Result<LlmResponse, ProviderError> {
         let prompt = build_reasoning_prompt(req.assembled_prompt, &req.ctx);
         let mut last_err = None;

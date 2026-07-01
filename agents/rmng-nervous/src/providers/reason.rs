@@ -3,6 +3,7 @@ use super::prompt::build_reasoning_prompt;
 use super::types::{parse_core_intent, LlmReasonContext, LlmRequest, ProviderError};
 use crate::nervous_audit::log_nervous_event;
 use rmng_core::CoreIntent;
+use std::time::Duration;
 
 const REPAIR_SUFFIX: &str = r#"
 Your previous response was NOT valid core-intent v2 JSON.
@@ -45,6 +46,7 @@ async fn attempt_repair(
             "provider={provider_id} parse_error={parse_err} preview={preview}"
         )),
     );
+    tokio::time::sleep(Duration::from_millis(600)).await;
     let repair_prompt = format!(
         "{}\n\n{REPAIR_SUFFIX}",
         build_reasoning_prompt(assembled, ctx)

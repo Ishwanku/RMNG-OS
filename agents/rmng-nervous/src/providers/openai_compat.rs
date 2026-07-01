@@ -11,6 +11,10 @@ struct ChatRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     response_format: Option<ResponseFormat>,
     temperature: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
 }
 
 #[derive(Serialize)]
@@ -48,6 +52,9 @@ pub struct OpenAiCompatProvider {
     model: String,
     client: reqwest::Client,
     max_retries: u32,
+    temperature: f32,
+    max_tokens: Option<u32>,
+    top_p: Option<f32>,
 }
 
 impl OpenAiCompatProvider {
@@ -58,6 +65,9 @@ impl OpenAiCompatProvider {
         model: impl Into<String>,
         timeout_secs: u64,
         max_retries: u32,
+        temperature: Option<f32>,
+        max_tokens: Option<u32>,
+        top_p: Option<f32>,
     ) -> Self {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
@@ -70,7 +80,54 @@ impl OpenAiCompatProvider {
             model: model.into(),
             client,
             max_retries,
+            temperature: temperature.unwrap_or(0.0),
+            max_tokens,
+            top_p,
         }
+    }
+
+    pub async fn list_models(&self) -> Result<Vec<String>, ProviderError> {
+        let url = format!("{}/models", self.base_url.trim_end_matches('/'));
+        let resp = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.api_key)
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            let message = resp.text().await.unwrap_or_default();
+            return Err(ProviderError::api(
+                self.provider_id,
+                status.as_u16(),
+                &message,
+            ));
+        }
+        let body = resp.text().await?;
+        Self::parse_models_body(&body)
+    }
+
+    fn parse_models_body(body: &str) -> Result<Vec<String>, ProviderError> {
+        #[derive(Deserialize)]
+        struct ModelsResponse {
+            data: Option<Vec<ModelEntry>>,
+        }
+        #[derive(Deserialize)]
+        struct ModelEntry {
+            id: String,
+        }
+        let parsed: ModelsResponse = serde_json::from_str(body).map_err(|e| {
+            ProviderError::Misconfigured(format!("models list parse error: {e}"))
+        })?;
+        let mut ids: Vec<String> = parsed
+            .data
+            .unwrap_or_default()
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        ids.sort();
+        ids.dedup();
+        Ok(ids)
     }
 
     pub fn id(&self) -> &'static str {
@@ -128,7 +185,9 @@ impl OpenAiCompatProvider {
             response_format: Some(ResponseFormat {
                 kind: "json_object",
             }),
-            temperature: 0.0,
+            temperature: self.temperature,
+            max_tokens: self.max_tokens,
+            top_p: self.top_p,
         };
         let resp = self
             .client

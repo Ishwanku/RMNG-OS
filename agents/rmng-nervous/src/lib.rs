@@ -13,9 +13,9 @@ pub use layer::{AgentLayer, LayerAgent};
 pub use providers::{
     catalog_path, default_endpoint, default_model, health_check, health_check_detailed,
     install_user_catalog, list_all_providers, list_catalog_models, list_supported_providers,
-    load_catalog, parse_core_intent, resolve_api_key, run_provider_matrix, HealthReport,
-    LlmBackend, LlmReasonContext, MatrixRow, ModelEntry, OllamaProvider, ProviderEntry,
-    ProviderError,
+    compare_models, fetch_live_models, load_catalog, parse_core_intent, resolve_api_key,
+    run_provider_matrix, HealthReport, LlmBackend, LlmReasonContext, MatrixRow, ModelEntry,
+    ModelSyncReport, OllamaProvider, ProviderEntry, ProviderError, ProviderErrorKind,
 };
 pub use router::{AgentRoute, AgentRouter, RouteOutcome, RouterError};
 pub use skill::{load_skill, load_skill_index, load_skills_for_agent, AgentSkill, SkillError, SkillSummary};

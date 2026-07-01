@@ -15,6 +15,7 @@ fn test_router(store: SessionStore) -> AgentRouter {
         },
         profile: None,
         profiles: vec![],
+        ..Default::default()
     });
     AgentRouter::with_session_store(registry, connector, store)
 }

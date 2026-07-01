@@ -31,7 +31,7 @@ pub enum LlmProviderKind {
     None,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LlmConfig {
     #[serde(default)]
     pub llm_provider: LlmProviderKind,
@@ -46,6 +46,10 @@ pub struct LlmConfig {
     pub max_retries: u32,
     #[serde(default = "default_timeout_secs")]
     pub timeout_secs: u64,
+    /// Generation overrides (Sprint 7) — provider defaults when unset.
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<u32>,
+    pub top_p: Option<f32>,
 }
 
 fn default_max_retries() -> u32 {
@@ -66,6 +70,9 @@ impl Default for LlmConfig {
             model: None,
             max_retries: default_max_retries(),
             timeout_secs: default_timeout_secs(),
+            temperature: None,
+            max_tokens: None,
+            top_p: None,
         }
     }
 }
@@ -100,6 +107,9 @@ pub struct LlmProfile {
     pub model: Option<String>,
     pub max_retries: Option<u32>,
     pub timeout_secs: Option<u64>,
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<u32>,
+    pub top_p: Option<f32>,
 }
 
 impl LlmProfile {
@@ -122,7 +132,34 @@ impl LlmProfile {
         if let Some(v) = self.timeout_secs {
             base.timeout_secs = v;
         }
+        if let Some(v) = self.temperature {
+            base.temperature = Some(v);
+        }
+        if let Some(v) = self.max_tokens {
+            base.max_tokens = Some(v);
+        }
+        if let Some(v) = self.top_p {
+            base.top_p = Some(v);
+        }
     }
+}
+
+/// Per-agent LLM override surface (from `agents/definitions/*.yaml`).
+pub trait AgentLlmOverride {
+    fn llm_profile_name(&self) -> Option<&str>;
+    fn llm_provider_override(&self) -> Option<LlmProviderKind>;
+    fn model_override(&self) -> Option<&str>;
+    /// Profile names to try after primary fails (Sprint 8). Empty → use global `llm_fallback`.
+    fn llm_fallback_profiles(&self) -> &[String] {
+        &[]
+    }
+}
+
+/// One step in a resolved LLM fallback chain.
+#[derive(Debug, Clone)]
+pub struct LlmConfigEntry {
+    pub label: String,
+    pub config: LlmConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -133,6 +170,9 @@ pub struct RmngConfig {
     pub profile: Option<String>,
     #[serde(default)]
     pub profiles: Vec<LlmProfile>,
+    /// Global fallback profile names (Sprint 8) — tried in order when primary LLM fails.
+    #[serde(default)]
+    pub llm_fallback: Vec<String>,
 }
 
 impl RmngConfig {
@@ -192,6 +232,71 @@ impl RmngConfig {
         cfg.profile = None;
         cfg
     }
+
+    /// Global config merged with per-agent overrides (profile → provider → model).
+    pub fn resolved_llm_for_agent(&self, agent: &dyn AgentLlmOverride) -> LlmConfig {
+        let mut llm = if let Some(name) = agent.llm_profile_name() {
+            let mut base = self.llm.clone();
+            if let Some(p) = self.profiles.iter().find(|p| p.name == name) {
+                p.apply_to(&mut base);
+                base
+            } else {
+                tracing::warn!(profile = name, "agent llm_profile not found; using global");
+                self.resolved_llm()
+            }
+        } else {
+            self.resolved_llm()
+        };
+        if let Some(p) = agent.llm_provider_override() {
+            llm.llm_provider = p;
+        }
+        if let Some(m) = agent.model_override() {
+            llm.model = Some(m.to_string());
+        }
+        llm
+    }
+
+    /// Resolve a named `[[profiles]]` entry to a full `LlmConfig`.
+    pub fn resolve_profile_by_name(&self, name: &str) -> Option<LlmConfig> {
+        let mut base = self.llm.clone();
+        let p = self.profiles.iter().find(|p| p.name == name)?;
+        p.apply_to(&mut base);
+        Some(base)
+    }
+
+    /// Primary LLM config plus ordered fallbacks (agent overrides global list).
+    pub fn resolved_llm_chain_for_agent(&self, agent: Option<&dyn AgentLlmOverride>) -> Vec<LlmConfigEntry> {
+        let primary = match agent {
+            Some(a) => self.resolved_llm_for_agent(a),
+            None => self.resolved_llm(),
+        };
+        let mut chain = vec![LlmConfigEntry {
+            label: "primary".into(),
+            config: primary,
+        }];
+
+        let fallback_names: Vec<String> = agent
+            .map(|a| a.llm_fallback_profiles().to_vec())
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| self.llm_fallback.clone());
+
+        for name in fallback_names {
+            let Some(cfg) = self.resolve_profile_by_name(&name) else {
+                tracing::warn!(profile = %name, "llm_fallback profile not found; skipping");
+                continue;
+            };
+            let duplicate = chain.last().is_some_and(|e| {
+                e.config.llm_provider == cfg.llm_provider && e.config.model == cfg.model
+            });
+            if !duplicate {
+                chain.push(LlmConfigEntry {
+                    label: format!("fallback:{name}"),
+                    config: cfg,
+                });
+            }
+        }
+        chain
+    }
 }
 
 /// Backward-compatible alias used across the workspace.
@@ -246,6 +351,61 @@ model = "gpt-4o"
         assert!(!cfg.llm_configured());
     }
 
+    struct TestAgent {
+        profile: Option<String>,
+        provider: Option<LlmProviderKind>,
+        model: Option<String>,
+        fallback: Vec<String>,
+    }
+
+    impl AgentLlmOverride for TestAgent {
+        fn llm_profile_name(&self) -> Option<&str> {
+            self.profile.as_deref()
+        }
+        fn llm_provider_override(&self) -> Option<LlmProviderKind> {
+            self.provider
+        }
+        fn model_override(&self) -> Option<&str> {
+            self.model.as_deref()
+        }
+        fn llm_fallback_profiles(&self) -> &[String] {
+            &self.fallback
+        }
+    }
+
+    #[test]
+    fn resolves_per_agent_llm_overrides() {
+        let raw = r#"
+[llm]
+llm_provider = "none"
+
+[[profiles]]
+name = "groq-fast"
+llm_provider = "groq"
+model = "llama-3.3-70b-versatile"
+api_key_env_var = "GROQ_API_KEY"
+"#;
+        let cfg: RmngConfig = toml::from_str(raw).unwrap();
+        let agent = TestAgent {
+            profile: Some("groq-fast".into()),
+            provider: None,
+            model: None,
+            fallback: vec![],
+        };
+        let llm = cfg.resolved_llm_for_agent(&agent);
+        assert_eq!(llm.llm_provider, LlmProviderKind::Groq);
+
+        let agent2 = TestAgent {
+            profile: None,
+            provider: Some(LlmProviderKind::Grok),
+            model: Some("grok-4.3".to_string()),
+            fallback: vec![],
+        };
+        let llm2 = cfg.resolved_llm_for_agent(&agent2);
+        assert_eq!(llm2.llm_provider, LlmProviderKind::Grok);
+        assert_eq!(llm2.model.as_deref(), Some("grok-4.3"));
+    }
+
     #[test]
     fn resolves_named_profile() {
         let raw = r#"
@@ -264,5 +424,46 @@ api_key_env_var = "GOOGLE_API_KEY"
         let llm = cfg.resolved_llm();
         assert_eq!(llm.llm_provider, LlmProviderKind::Google);
         assert_eq!(llm.model.as_deref(), Some("gemini-3.5-flash"));
+    }
+
+    #[test]
+    fn resolves_llm_fallback_chain_global_and_per_agent() {
+        let raw = r#"
+llm_fallback = ["grok-frontier", "local-ollama"]
+
+[llm]
+llm_provider = "groq"
+model = "llama-3.3-70b-versatile"
+api_key_env_var = "GROQ_API_KEY"
+
+[[profiles]]
+name = "grok-frontier"
+llm_provider = "grok"
+model = "grok-4.3"
+api_key_env_var = "XAI_API_KEY"
+
+[[profiles]]
+name = "local-ollama"
+llm_provider = "ollama"
+endpoint_url = "http://127.0.0.1:11434"
+model = "llama3.2"
+"#;
+        let cfg: RmngConfig = toml::from_str(raw).unwrap();
+        let global = cfg.resolved_llm_chain_for_agent(None);
+        assert_eq!(global.len(), 3);
+        assert_eq!(global[0].label, "primary");
+        assert_eq!(global[0].config.llm_provider, LlmProviderKind::Groq);
+        assert_eq!(global[1].label, "fallback:grok-frontier");
+        assert_eq!(global[2].label, "fallback:local-ollama");
+
+        let agent = TestAgent {
+            profile: None,
+            provider: None,
+            model: None,
+            fallback: vec!["local-ollama".into()],
+        };
+        let per_agent = cfg.resolved_llm_chain_for_agent(Some(&agent));
+        assert_eq!(per_agent.len(), 2);
+        assert_eq!(per_agent[1].label, "fallback:local-ollama");
     }
 }

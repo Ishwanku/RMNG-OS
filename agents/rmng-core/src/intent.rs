@@ -23,6 +23,9 @@ pub struct Metadata {
     /// Target agent for autonomous handoff (Sprint 6).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub handoff_to: Option<String>,
+    /// Multi-hop handoff chain — router executes each hop in order (Sprint 7).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handoff_chain: Option<Vec<String>>,
 }
 
 /// Internally tagged poly-intent: native tools, MCP proxy, or plan-only reasoning.

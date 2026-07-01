@@ -18,6 +18,9 @@ llm_provider = "none"
 # endpoint_url = "http://127.0.0.1:11434"
 # max_retries = 2
 # timeout_secs = 120
+# temperature = 0.0
+# max_tokens = 4096
+# top_p = 1.0
 
 # Named profiles — switch with: rmng llm use <name>
 
@@ -51,6 +54,9 @@ name = "local-ollama"
 llm_provider = "ollama"
 endpoint_url = "http://127.0.0.1:11434"
 model = "llama3.2"
+
+# Global LLM fallback chain (Sprint 8) — profile names tried in order after primary fails
+# llm_fallback = ["grok-frontier", "local-ollama"]
 
 [[profiles]]
 name = "groq-fast"

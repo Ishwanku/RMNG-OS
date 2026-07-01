@@ -1,7 +1,7 @@
 use rmng_core::{parse_provider_str, LlmProviderKind, RmngConfig};
 use rmng_nervous::{
-    catalog_path, default_model, install_user_catalog, list_all_providers, list_catalog_models,
-    load_catalog, resolve_api_key,
+    catalog_path, compare_models, default_model, install_user_catalog, list_all_providers,
+    list_catalog_models, load_catalog, resolve_api_key,
 };
 
 pub fn print_show() {
@@ -67,7 +67,7 @@ pub fn print_providers() {
     }
 }
 
-pub fn print_models(provider: Option<&str>, include_specialized: bool) {
+pub fn print_models(provider: Option<&str>, include_specialized: bool, live: bool) {
     let prov = match provider {
         Some(s) => parse_provider_str(s).unwrap_or_else(|e| {
             eprintln!("{e}");
@@ -75,6 +75,12 @@ pub fn print_models(provider: Option<&str>, include_specialized: bool) {
         }),
         None => RmngConfig::load().resolved_llm().llm_provider,
     };
+
+    if live {
+        print_models_live(prov, include_specialized);
+        return;
+    }
+
     let models = list_catalog_models(prov, include_specialized);
     if models.is_empty() {
         println!("No catalog models for {prov:?}");
@@ -82,17 +88,67 @@ pub fn print_models(provider: Option<&str>, include_specialized: bool) {
     }
     println!("Models for {:?} (catalog):", prov);
     for m in models {
-        let tags = [
-            if m.default { Some("default") } else { None },
-            if m.specialized { Some("specialized") } else { None },
-            m.tier.as_deref(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-        .join(", ");
-        let desc = m.description.as_deref().unwrap_or("");
-        println!("  {:<36} [{tags}] {desc}", m.id);
+        print_catalog_entry(&m);
+    }
+}
+
+fn print_catalog_entry(m: &rmng_nervous::ModelEntry) {
+    let tags = [
+        if m.default { Some("default") } else { None },
+        if m.specialized { Some("specialized") } else { None },
+        m.tier.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(", ");
+    let desc = m.description.as_deref().unwrap_or("");
+    println!("  {:<36} [{tags}] {desc}", m.id);
+}
+
+fn print_models_live(prov: LlmProviderKind, include_specialized: bool) {
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    match rt.block_on(compare_models(prov, include_specialized)) {
+        Ok(report) => {
+            println!("Models for {:?} (live vs catalog):", prov);
+            if let Some(note) = &report.detail {
+                println!("  note: {note}");
+            }
+            if !report.live_models.is_empty() {
+                println!();
+                println!("-- live API ({} models) --", report.live_models.len());
+                for id in &report.live_models {
+                    let in_catalog = list_catalog_models(prov, include_specialized)
+                        .iter()
+                        .any(|m| m.id == *id);
+                    let tag = if in_catalog { "catalog" } else { "NEW" };
+                    println!("  {id:<36} [{tag}]");
+                }
+            }
+            println!();
+            println!("-- catalog --");
+            for m in list_catalog_models(prov, include_specialized) {
+                print_catalog_entry(&m);
+            }
+            if !report.catalog_only.is_empty() {
+                println!();
+                println!("WARN catalog-only (not in live API — may be deprecated/renamed):");
+                for id in &report.catalog_only {
+                    println!("  {id}");
+                }
+            }
+            if !report.live_only.is_empty() {
+                println!();
+                println!("WARN live-only (add to ~/.rmng/llm-catalog.toml):");
+                for id in &report.live_only {
+                    println!("  {id}");
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("live model discovery failed: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
@@ -150,4 +206,57 @@ pub fn run_use(profile_name: &str) -> i32 {
 
 fn parse_id(id: &str) -> LlmProviderKind {
     parse_provider_str(id).unwrap_or(LlmProviderKind::None)
+}
+
+/// Compare live provider APIs against local catalog for all wired providers (Sprint 8).
+pub fn run_sync_catalog(include_specialized: bool) -> i32 {
+    let providers = [
+        "grok", "openai", "groq", "google", "anthropic", "together", "fireworks", "deepseek",
+        "nvidia_nim", "ollama",
+    ];
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let mut warnings = 0u32;
+    println!("Catalog sync — live API vs ~/.rmng/llm-catalog.toml");
+    println!();
+    for id in providers {
+        let prov = match parse_provider_str(id) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("  {id}: skip ({e})");
+                continue;
+            }
+        };
+        match rt.block_on(compare_models(prov, include_specialized)) {
+            Ok(report) => {
+                let drift = report.catalog_only.len() + report.live_only.len();
+                if drift > 0 {
+                    warnings += 1;
+                }
+                println!(
+                    "{id:<12} live={} catalog_only={} live_only={}",
+                    report.live_models.len(),
+                    report.catalog_only.len(),
+                    report.live_only.len()
+                );
+                if let Some(note) = &report.detail {
+                    println!("             note: {note}");
+                }
+                for m in &report.catalog_only {
+                    println!("             WARN catalog-only: {m}");
+                }
+                for m in report.live_only.iter().take(5) {
+                    println!("             WARN live-only: {m}");
+                }
+            }
+            Err(e) => println!("{id:<12} ERROR: {e}"),
+        }
+    }
+    println!();
+    if warnings > 0 {
+        println!("{warnings} provider(s) with catalog drift — edit ~/.rmng/llm-catalog.toml");
+        1
+    } else {
+        println!("No drift detected (or no live API access).");
+        0
+    }
 }

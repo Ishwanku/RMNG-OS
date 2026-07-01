@@ -39,6 +39,26 @@ const TARGETS: &[MatrixTarget] = &[
         label: "google",
     },
     MatrixTarget {
+        provider: LlmProvider::Anthropic,
+        label: "anthropic",
+    },
+    MatrixTarget {
+        provider: LlmProvider::Together,
+        label: "together",
+    },
+    MatrixTarget {
+        provider: LlmProvider::Fireworks,
+        label: "fireworks",
+    },
+    MatrixTarget {
+        provider: LlmProvider::DeepSeek,
+        label: "deepseek",
+    },
+    MatrixTarget {
+        provider: LlmProvider::NvidiaNim,
+        label: "nvidia_nim",
+    },
+    MatrixTarget {
         provider: LlmProvider::Ollama,
         label: "ollama",
     },
@@ -111,11 +131,14 @@ async fn probe_provider(provider: LlmProvider, label: &str) -> MatrixRow {
             let ok = matches!(intent, rmng_core::CoreIntent::PlanOnly { .. });
             (Some(ok), "core-intent parse ok".to_string())
         }
-        Err(ProviderError::Api { status, message, .. }) => (
+        Err(ref e @ ProviderError::Api { status, ref message, .. }) => (
             Some(false),
-            format!("API {status}: {message}"),
+            format!("API {status} [{:?}]: {message}", e.kind()),
         ),
-        Err(e) => (Some(false), format!("reason failed: {e}")),
+        Err(e) => (
+            Some(false),
+            format!("reason failed [{:?}]: {e}", e.kind()),
+        ),
     };
 
     let detail = if health_ok == Some(false) {

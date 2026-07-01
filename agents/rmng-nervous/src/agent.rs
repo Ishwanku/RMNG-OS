@@ -1,5 +1,5 @@
 use crate::layer::{AgentLayer, LayerAgent};
-use rmng_core::CoreIntent;
+use rmng_core::{AgentLlmOverride, CoreIntent, LlmProviderKind};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -21,6 +21,18 @@ pub struct AgentDefinition {
     /// Explicit handoff targets (agent ids). Wildcards not supported here.
     #[serde(default)]
     pub delegates_to: Vec<String>,
+    /// Named LLM profile from `~/.rmng/config.toml` `[[profiles]]` (Sprint 7).
+    #[serde(default)]
+    pub llm_profile: Option<String>,
+    /// Per-agent provider override (used when `llm_profile` is unset).
+    #[serde(default)]
+    pub llm_provider: Option<LlmProviderKind>,
+    /// Per-agent model id override.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Fallback profile names from `~/.rmng/config.toml` (Sprint 8).
+    #[serde(default)]
+    pub llm_fallback: Vec<String>,
 }
 
 fn default_layer() -> AgentLayer {
@@ -148,6 +160,24 @@ impl AgentRegistry {
 
     pub fn definitions_root(&self) -> &Path {
         &self.root
+    }
+}
+
+impl AgentLlmOverride for AgentDefinition {
+    fn llm_profile_name(&self) -> Option<&str> {
+        self.llm_profile.as_deref()
+    }
+
+    fn llm_provider_override(&self) -> Option<LlmProviderKind> {
+        self.llm_provider
+    }
+
+    fn model_override(&self) -> Option<&str> {
+        self.model.as_deref()
+    }
+
+    fn llm_fallback_profiles(&self) -> &[String] {
+        &self.llm_fallback
     }
 }
 

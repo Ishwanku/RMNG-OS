@@ -20,12 +20,13 @@ pub use audit::{AuditEntry, AuditLog, AuditTrack};
 pub use registry::{IntegrationManifest, IntegrationRegistry, ToolManifest};
 pub use session::{
     build_tool_result_record, persist_dispatch_to_session, session_ttl_days, AgentSession,
-    HandoffRecord, SessionError, SessionLoadOptions, SessionStore, ToolResultRecord,
-    DEFAULT_SESSION_TTL_DAYS, MAX_TOOL_OUTPUT_LEN,
+    HandoffRecord, LlmCallRecord, SessionError, SessionLoadOptions, SessionStore,
+    ToolResultRecord, DEFAULT_SESSION_TTL_DAYS, MAX_TOOL_OUTPUT_LEN,
 };
 pub use validator::IntentValidator;
 pub use config::{
-    parse_provider_str, LlmConfig, LlmProfile, LlmProvider, LlmProviderKind, RmngConfig,
+    parse_provider_str, AgentLlmOverride, LlmConfig, LlmConfigEntry, LlmProfile, LlmProvider,
+    LlmProviderKind, RmngConfig,
 };
 pub use dispatch::Runtime;
 pub use error::RmngError;

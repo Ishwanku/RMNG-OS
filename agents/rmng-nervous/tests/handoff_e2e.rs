@@ -17,6 +17,7 @@ fn mock_connector() -> rmng_nervous::NervousConnector {
         },
         profile: None,
         profiles: vec![],
+        ..Default::default()
     })
 }
 
@@ -180,6 +181,7 @@ fn build_tool_result_record_captures_mcp_and_metadata() {
             session_id: Some("sid".into()),
             handoff_from: Some("research-curator".into()),
             handoff_to: None,
+            handoff_chain: None,
         }),
     };
     let resp = HandleResponse::failure("mcp unavailable");

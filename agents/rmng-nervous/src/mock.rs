@@ -7,6 +7,7 @@ fn skill_metadata(skill_name: Option<&str>) -> Option<Metadata> {
         session_id: None,
         handoff_from: None,
         handoff_to: None,
+        handoff_chain: None,
         trace_id: None,
     })
 }
@@ -20,6 +21,7 @@ fn session_metadata(
         session_id: None,
         handoff_from: None,
         handoff_to: None,
+        handoff_chain: None,
         trace_id: None,
     });
     if let Some(sess) = session {

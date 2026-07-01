@@ -124,17 +124,38 @@ impl AgentRouter {
         let intent = self.reason_for_route(session_id, &route, prompt).await?;
         route.agent.allows_core_intent(&intent).map_err(RouterError::PolicyDenied)?;
 
-        if let (Some(sid), Some(target)) = (session_id, Self::handoff_target(&intent)) {
-            if target != agent_id {
+        if let Some(sid) = session_id {
+            if let Some(chain) = Self::metadata_handoff_chain(&intent) {
+                if let Err(e) = self.validate_handoff_chain(sid, &chain) {
+                    tracing::warn!(session = sid, error = %e, "handoff_chain pre-validation failed");
+                    return Err(e);
+                }
                 tracing::info!(
                     session = sid,
                     from = agent_id,
-                    to = target,
-                    "autonomous handoff from LLM metadata.handoff_to"
+                    chain = ?chain,
+                    "autonomous multi-hop handoff from LLM metadata.handoff_chain"
                 );
                 return self
-                    .handoff(sid, agent_id, target, prompt, "llm suggested handoff")
+                    .handoff_chain(sid, &chain, prompt, "llm suggested handoff chain")
                     .await;
+            }
+            if let Some(target) = Self::handoff_target(&intent) {
+                if target != agent_id {
+                    if let Err(e) = self.validate_handoff(sid, agent_id, target) {
+                        tracing::warn!(session = sid, error = %e, "handoff pre-validation failed");
+                        return Err(e);
+                    }
+                    tracing::info!(
+                        session = sid,
+                        from = agent_id,
+                        to = target,
+                        "autonomous handoff from LLM metadata.handoff_to"
+                    );
+                    return self
+                        .handoff(sid, agent_id, target, prompt, "llm suggested handoff")
+                        .await;
+                }
             }
         }
 
@@ -147,6 +168,52 @@ impl AgentRouter {
         })
     }
 
+    /// Pre-validate a single handoff (Sprint 8) — agent exists, layer rules, session active.
+    pub fn validate_handoff(
+        &self,
+        session_id: &str,
+        from_id: &str,
+        to_id: &str,
+    ) -> Result<(), RouterError> {
+        self.sessions
+            .load(session_id)
+            .map_err(|e| RouterError::Session(format!("session '{session_id}': {e}")))?;
+        let from = self.registry.get(from_id)?;
+        let to = self.registry.get(to_id)?;
+        from.validate_handoff_to(to).map_err(|e| {
+            RouterError::Session(format!(
+                "handoff '{from_id}' → '{to_id}' rejected: {e}"
+            ))
+        })
+    }
+
+    /// Pre-validate every hop in a handoff chain (Sprint 8).
+    pub fn validate_handoff_chain(
+        &self,
+        session_id: &str,
+        chain: &[String],
+    ) -> Result<(), RouterError> {
+        if chain.len() < 2 {
+            return Err(RouterError::Session(
+                "handoff chain requires at least two agent ids".into(),
+            ));
+        }
+        self.sessions
+            .load(session_id)
+            .map_err(|e| RouterError::Session(format!("session '{session_id}': {e}")))?;
+        for id in chain {
+            self.registry.get(id).map_err(|e| {
+                RouterError::Session(format!("chain agent '{id}' invalid: {e}"))
+            })?;
+        }
+        for i in 0..chain.len() - 1 {
+            let from_id = &chain[i];
+            let to_id = &chain[i + 1];
+            self.validate_handoff(session_id, from_id, to_id)?;
+        }
+        Ok(())
+    }
+
     /// Explicit handoff from one agent to another within a session.
     pub async fn handoff(
         &self,
@@ -156,9 +223,9 @@ impl AgentRouter {
         prompt: &str,
         reason: &str,
     ) -> Result<RouteOutcome, RouterError> {
+        self.validate_handoff(session_id, from_id, to_id)?;
         let from = self.registry.get(from_id)?.clone();
         let to = self.registry.get(to_id)?.clone();
-        from.validate_handoff_to(&to)?;
         let route = self.resolve(to_id)?;
         let intent = self.reason_for_route(Some(session_id), &route, prompt).await?;
         to.allows_core_intent(&intent).map_err(RouterError::PolicyDenied)?;
@@ -200,11 +267,7 @@ impl AgentRouter {
         prompt: &str,
         reason: &str,
     ) -> Result<RouteOutcome, RouterError> {
-        if chain.len() < 2 {
-            return Err(RouterError::Session(
-                "handoff chain requires at least two agents".into(),
-            ));
-        }
+        self.validate_handoff_chain(session_id, chain)?;
         let mut last: Option<RouteOutcome> = None;
         for i in 0..chain.len() - 1 {
             let from_id = &chain[i];
@@ -252,22 +315,50 @@ impl AgentRouter {
                 format!("mcp {mcp_server}.{mcp_tool}"),
             ),
             CoreIntent::PlanOnly { reasoning: _, .. } => {
-                if let (Some(sid), Some(target)) = (session_id, Self::handoff_target(&plan)) {
-                    tracing::info!(
-                        session = sid,
-                        from = %orchestrator.id,
-                        to = target,
-                        "orchestrator autonomous handoff via metadata.handoff_to"
-                    );
-                    return self
-                        .handoff(
-                            sid,
-                            &orchestrator.id,
-                            target,
-                            prompt,
-                            "llm orchestration handoff",
-                        )
-                        .await;
+                if let Some(sid) = session_id {
+                    if let Some(chain) = Self::metadata_handoff_chain(&plan) {
+                        if let Err(e) = self.validate_handoff_chain(sid, &chain) {
+                            tracing::warn!(session = sid, error = %e, "orchestrator handoff_chain rejected");
+                            return Err(e);
+                        }
+                        tracing::info!(
+                            session = sid,
+                            from = %orchestrator.id,
+                            chain = ?chain,
+                            "orchestrator multi-hop handoff via metadata.handoff_chain"
+                        );
+                        return self
+                            .handoff_chain(
+                                sid,
+                                &chain,
+                                prompt,
+                                "llm orchestration handoff chain",
+                            )
+                            .await;
+                    }
+                    if let Some(target) = Self::handoff_target(&plan) {
+                        if let Err(e) =
+                            self.validate_handoff(sid, &orchestrator.id, target)
+                        {
+                            tracing::warn!(session = sid, error = %e, "orchestrator handoff rejected");
+                            return Err(e);
+                        }
+                        tracing::info!(
+                            session = sid,
+                            from = %orchestrator.id,
+                            to = target,
+                            "orchestrator autonomous handoff via metadata.handoff_to"
+                        );
+                        return self
+                            .handoff(
+                                sid,
+                                &orchestrator.id,
+                                target,
+                                prompt,
+                                "llm orchestration handoff",
+                            )
+                            .await;
+                    }
                 }
                 if let Some(sid) = session_id {
                     self.touch_session(sid, orchestrator, prompt)?;
@@ -353,6 +444,21 @@ impl AgentRouter {
             .filter(|s| !s.is_empty())
     }
 
+    fn metadata_handoff_chain(intent: &CoreIntent) -> Option<Vec<String>> {
+        intent.metadata().and_then(|m| m.handoff_chain.as_ref()).and_then(|chain| {
+            let ids: Vec<String> = chain
+                .iter()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if ids.len() >= 2 {
+                Some(ids)
+            } else {
+                None
+            }
+        })
+    }
+
     /// Attach session/handoff metadata to an intent before rmngd dispatch.
     pub fn enrich_intent_metadata(
         intent: &mut CoreIntent,
@@ -367,6 +473,7 @@ impl AgentRouter {
                 session_id: None,
                 handoff_from: None,
                 handoff_to: None,
+                handoff_chain: None,
             });
             if let Some(sid) = session_id {
                 m.session_id = Some(sid.to_string());
@@ -458,9 +565,32 @@ mod tests {
                 session_id: Some("sess-1".into()),
                 handoff_from: None,
                 handoff_to: Some("repo-keeper".into()),
+                handoff_chain: None,
             }),
         };
         assert_eq!(AgentRouter::handoff_target(&intent), Some("repo-keeper"));
+    }
+
+    #[test]
+    fn handoff_chain_reads_metadata() {
+        let intent = CoreIntent::PlanOnly {
+            reasoning: "delegate chain".into(),
+            metadata: Some(rmng_core::intent::Metadata {
+                trace_id: None,
+                skill_name: None,
+                session_id: Some("sess-1".into()),
+                handoff_from: None,
+                handoff_to: None,
+                handoff_chain: Some(vec![
+                    "swarm-coordinator".into(),
+                    "repo-keeper".into(),
+                    "runtime-executor".into(),
+                ]),
+            }),
+        };
+        let chain = AgentRouter::metadata_handoff_chain(&intent).unwrap();
+        assert_eq!(chain.len(), 3);
+        assert_eq!(chain[1], "repo-keeper");
     }
 
     #[test]
@@ -472,5 +602,70 @@ mod tests {
             metadata: None,
         };
         assert!(AgentRouter::validate_intent(&agent, &intent).is_err());
+    }
+
+    fn test_router_with_session(store: SessionStore) -> AgentRouter {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../definitions");
+        let registry = AgentRegistry::load_from(root).expect("registry");
+        let connector = NervousConnector::from_config(rmng_core::RmngConfig::default());
+        AgentRouter::with_session_store(registry, connector, store)
+    }
+
+    #[test]
+    fn validate_handoff_rejects_unknown_agent() {
+        let dir = std::env::temp_dir().join(format!("rmng-val-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let session = store.create().expect("create");
+        let router = test_router_with_session(store);
+        let err = router
+            .validate_handoff(&session.id, "swarm-coordinator", "no-such-agent")
+            .unwrap_err();
+        assert!(err.to_string().contains("no-such-agent"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn validate_handoff_rejects_layer_violation() {
+        let dir = std::env::temp_dir().join(format!("rmng-val-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let session = store.create().expect("create");
+        let router = test_router_with_session(store);
+        let err = router
+            .validate_handoff(&session.id, "repo-keeper", "swarm-coordinator")
+            .unwrap_err();
+        assert!(err.to_string().contains("rejected"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn validate_handoff_chain_requires_two_agents() {
+        let dir = std::env::temp_dir().join(format!("rmng-val-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let session = store.create().expect("create");
+        let router = test_router_with_session(store);
+        let err = router
+            .validate_handoff_chain(&session.id, &["swarm-coordinator".into()])
+            .unwrap_err();
+        assert!(err.to_string().contains("at least two"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn validate_handoff_chain_accepts_valid_hops() {
+        let dir = std::env::temp_dir().join(format!("rmng-val-{}", uuid::Uuid::new_v4()));
+        let store = SessionStore::new(&dir);
+        let session = store.create().expect("create");
+        let router = test_router_with_session(store);
+        router
+            .validate_handoff_chain(
+                &session.id,
+                &[
+                    "swarm-coordinator".into(),
+                    "repo-keeper".into(),
+                    "runtime-executor".into(),
+                ],
+            )
+            .expect("valid chain");
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 pub const MAX_TOOL_OUTPUT_LEN: usize = 4096;
 /// Max tool result records retained per session.
 const MAX_TOOL_RESULTS: usize = 50;
+/// Max LLM call records retained per session.
+const MAX_LLM_CALLS: usize = 100;
 
 /// Persistent multi-agent session at `~/.rmng/sessions/<id>.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -24,6 +26,25 @@ pub struct AgentSession {
     pub task_state: TaskState,
     #[serde(default)]
     pub handoff_history: Vec<HandoffRecord>,
+    /// Per-agent LLM call metrics (Sprint 8).
+    #[serde(default)]
+    pub llm_calls: Vec<LlmCallRecord>,
+}
+
+/// One nervous-system LLM invocation recorded on the session.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LlmCallRecord {
+    pub timestamp: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    pub provider: String,
+    pub model: String,
+    pub profile_label: String,
+    pub latency_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completion_tokens: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -131,6 +152,7 @@ impl SessionStore {
                 notes: Vec::new(),
             },
             handoff_history: Vec::new(),
+            llm_calls: Vec::new(),
         };
         self.save(&session)?;
         Ok(session)
@@ -228,6 +250,20 @@ impl SessionStore {
             reason: reason.to_string(),
             prompt: prompt.map(str::to_string),
         });
+        session.updated_at = Utc::now();
+        self.save(session)
+    }
+
+    pub fn record_llm_call(
+        &self,
+        session: &mut AgentSession,
+        record: LlmCallRecord,
+    ) -> Result<(), SessionError> {
+        session.llm_calls.push(record);
+        if session.llm_calls.len() > MAX_LLM_CALLS {
+            let drain = session.llm_calls.len() - MAX_LLM_CALLS;
+            session.llm_calls.drain(0..drain);
+        }
         session.updated_at = Utc::now();
         self.save(session)
     }

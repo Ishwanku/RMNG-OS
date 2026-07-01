@@ -81,6 +81,42 @@ impl GoogleProvider {
         "google"
     }
 
+    pub async fn list_models(&self) -> Result<Vec<String>, ProviderError> {
+        let url = format!(
+            "{}/v1beta/models",
+            self.base_url.trim_end_matches('/')
+        );
+        let resp = self
+            .client
+            .get(&url)
+            .header("X-goog-api-key", &self.api_key)
+            .send()
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            let message = resp.text().await.unwrap_or_default();
+            return Err(ProviderError::api("google", status.as_u16(), &message));
+        }
+        #[derive(Deserialize)]
+        struct ModelsResponse {
+            models: Option<Vec<GoogleModelEntry>>,
+        }
+        #[derive(Deserialize)]
+        struct GoogleModelEntry {
+            name: String,
+        }
+        let parsed: ModelsResponse = resp.json().await?;
+        let mut ids: Vec<String> = parsed
+            .models
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|m| m.name.strip_prefix("models/").map(str::to_string))
+            .collect();
+        ids.sort();
+        ids.dedup();
+        Ok(ids)
+    }
+
     pub async fn health(&self) -> Result<bool, ProviderError> {
         self.complete_once("Respond with {}").await.map(|_| true).or_else(|e| {
             if matches!(e, ProviderError::Api { status: 401 | 403, .. }) {

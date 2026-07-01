@@ -17,6 +17,7 @@ fn ollama_config() -> RmngConfig {
         },
         profile: None,
         profiles: vec![],
+        ..Default::default()
     }
 }
 

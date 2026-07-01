@@ -1,9 +1,12 @@
 use crate::agent::AgentDefinition;
 use crate::mock::mock_core_intent;
-use crate::providers::{provider_label, LlmBackend, LlmReasonContext, ProviderError};
+use crate::nervous_audit::log_nervous_event;
+use crate::providers::{default_model, provider_label, LlmBackend, LlmReasonContext, ProviderError};
 use crate::skill::{assemble_prompt_full, AgentSkill};
+use rmng_core::session::{LlmCallRecord, SessionStore};
 use rmng_core::AgentSession;
 use rmng_core::{CoreIntent, RmngConfig};
+use std::time::Instant;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectorError {
@@ -15,6 +18,8 @@ pub enum ConnectorError {
     Adapter(#[from] ProviderError),
     #[error("runtime error: {0}")]
     Runtime(#[from] rmng_core::RmngError),
+    #[error("all LLM providers in fallback chain failed: {0}")]
+    FallbackExhausted(String),
 }
 
 pub struct NervousConnector {
@@ -76,8 +81,11 @@ impl NervousConnector {
             skill_name,
         };
 
-        let llm = self.config.resolved_llm();
-        if llm.is_mock() {
+        let chain = self
+            .config
+            .resolved_llm_chain_for_agent(agent.map(|a| a as &dyn rmng_core::AgentLlmOverride));
+
+        if chain.len() == 1 && chain[0].config.is_mock() {
             return Ok(mock_core_intent(
                 prompt,
                 skill_name,
@@ -87,16 +95,116 @@ impl NervousConnector {
             ));
         }
 
-        let backend = LlmBackend::from_config(&llm)?;
-        match backend {
-            Some(b) => Ok(b.reason_core(&assembled, &llm_ctx).await?),
-            None => Ok(mock_core_intent(
+        let mut errors: Vec<String> = Vec::new();
+        for (idx, entry) in chain.iter().enumerate() {
+            if entry.config.is_mock() {
+                continue;
+            }
+            let backend = match LlmBackend::from_config(&entry.config) {
+                Ok(Some(b)) => b,
+                Ok(None) => continue,
+                Err(e) => {
+                    errors.push(format!("{}: misconfigured ({e})", entry.label));
+                    continue;
+                }
+            };
+
+            let started = Instant::now();
+            match backend.reason_core(&assembled, &llm_ctx).await {
+                Ok(intent) => {
+                    let latency_ms = started.elapsed().as_millis() as u64;
+                    if idx > 0 {
+                        log_nervous_event(
+                            "nervous.llm_fallback",
+                            "success",
+                            Some(&format!(
+                                "used {} after {} prior failure(s)",
+                                entry.label,
+                                idx
+                            )),
+                        );
+                    }
+                    let model = entry
+                        .config
+                        .model
+                        .clone()
+                        .unwrap_or_else(|| default_model(entry.config.llm_provider));
+                    self.record_llm_call(
+                        session,
+                        agent.map(|a| a.id.as_str()),
+                        &entry.label,
+                        backend.id(),
+                        &model,
+                        latency_ms,
+                        None,
+                        None,
+                    );
+                    return Ok(intent);
+                }
+                Err(e) if e.warrants_provider_fallback() && idx + 1 < chain.len() => {
+                    log_nervous_event(
+                        "nervous.llm_fallback",
+                        "retry",
+                        Some(&format!(
+                            "{} failed [{:?}]: {e}; trying next profile",
+                            entry.label,
+                            e.kind()
+                        )),
+                    );
+                    errors.push(format!("{}: {e}", entry.label));
+                }
+                Err(e) => {
+                    errors.push(format!("{}: {e}", entry.label));
+                    if idx + 1 < chain.len() {
+                        continue;
+                    }
+                    return Err(ConnectorError::Adapter(e));
+                }
+            }
+        }
+
+        if errors.is_empty() {
+            return Ok(mock_core_intent(
                 prompt,
                 skill_name,
                 skill.map(|s| s.instructions.as_str()),
                 agent,
                 session,
-            )),
+            ));
+        }
+        Err(ConnectorError::FallbackExhausted(errors.join("; ")))
+    }
+
+    fn record_llm_call(
+        &self,
+        session: Option<&AgentSession>,
+        agent_id: Option<&str>,
+        profile_label: &str,
+        provider: &str,
+        model: &str,
+        latency_ms: u64,
+        prompt_tokens: Option<u32>,
+        completion_tokens: Option<u32>,
+    ) {
+        let Some(sess) = session else {
+            return;
+        };
+        let store = SessionStore::default_store();
+        let Ok(mut loaded) = store.load(&sess.id) else {
+            return;
+        };
+        let record = LlmCallRecord {
+            timestamp: chrono::Utc::now(),
+            agent_id: agent_id.map(str::to_string),
+            provider: provider.to_string(),
+            model: model.to_string(),
+            profile_label: profile_label.to_string(),
+            latency_ms,
+            prompt_tokens,
+            completion_tokens,
+        };
+        if let Err(e) = store.record_llm_call(&mut loaded, record) {
+            tracing::warn!(error = %e, "llm metrics write failed");
         }
     }
 

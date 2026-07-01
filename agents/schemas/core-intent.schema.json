@@ -37,6 +37,15 @@
           "type": "string",
           "minLength": 1,
           "description": "Suggested next agent for autonomous handoff (orchestration)"
+        },
+        "handoff_chain": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Ordered multi-hop handoff chain (e.g. swarm-coordinator → repo-keeper → runtime-executor)"
         }
       }
     },
