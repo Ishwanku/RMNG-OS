@@ -28,11 +28,11 @@ MCP tools run as **ephemeral subprocesses** under `rmngd`. The LLM never calls M
 
 | Server | Tools | Agent |
 |--------|-------|-------|
-| `github` | `search_issues`, `get_issue` | research-curator |
-| `git` | `git.log` | repo-keeper |
+| `github` | `search_issues`, `list_issues`, `get_issue` | research-curator |
+| `git` | `git.log`, `git.diff`, `git.status` | repo-keeper |
 | `fetch` | `fetch` | web-researcher |
 | `markitdown` | `convert_to_markdown` | web-researcher |
-| `playwright` | `browser_navigate`, `browser_snapshot` | web-researcher (opt-in) |
+| `playwright` | `browser_navigate`, `browser_snapshot`, `browser_click` | browser-researcher (opt-in) |
 
 ## Safety
 

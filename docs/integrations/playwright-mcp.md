@@ -4,44 +4,54 @@
 |-------|-------|
 | **Repository** | https://github.com/microsoft/playwright-mcp |
 | **License** | Apache-2.0 |
-| **Date** | 2026-07-01 |
+| **Date** | 2026-07-02 |
 | **Proposed track** | 2 — MCP Proxy |
-| **Status** | **Active** (disabled by default in example allowlist) |
+| **Status** | **Active** (disabled by default) |
 
 ## Summary
 
-Exposes Playwright accessibility tree over MCP — DOM-first navigation without vision tokens. Enables research agents to interact with web UIs deterministically.
+Exposes Playwright accessibility tree over MCP — DOM-first navigation without vision tokens.
 
 ## Evaluation scores (1–5)
 
 | Dimension | Score | Notes |
 |-----------|-------|-------|
-| Execution plane isolation | 4 | Subprocess; browser child processes |
-| Structural determinism | 4 | Tool set evolves — pin version |
-| Zero-trust security | 3 | Full browser capability — enable per-agent only |
+| Execution plane isolation | 4 | Subprocess + browser children; cgroup limits |
+| Structural determinism | 4 | Pin version after E2E |
+| Zero-trust security | 3 | Full browser — opt-in only |
 | Architectural fit (ADR-010) | 5 | MCP proxy only |
 | **Average** | **4.0** | |
 
 ## Threat model
 
-- Prompt injection surface: page content → LLM
-- Filesystem access: browser downloads possible — use isolated profile
-- Network egress: unrestricted web
-- Credential handling: may access logged-in sessions if browser profile shared
+- Prompt injection: page content → LLM
+- Filesystem: browser downloads — isolated profile required
+- Network: unrestricted web egress
+- Credentials: never share logged-in browser profiles
 
-## Implementation
+## Implementation (Sprint 14)
 
 ### Track 2
-- [x] Example allowlist entry (disabled by default)
-- [x] `web-researcher` agent with limited tool allowlist
-- [ ] Register: `npx -y @playwright/mcp@latest`
-- [ ] Pin version after first successful E2E
-- [ ] Isolation: recommend `[servers.playwright.isolation] memory_mb = 1024`
+- [x] Example allowlist entry (`enabled = false`)
+- [x] Isolation: `memory_mb=1024`, `pids_max=128`, cgroup, `new_session`, `no_new_privs`
+- [x] `browser-researcher` agent (tight tool scope)
+- [x] E2E: `agents/rmng-nervous/tests/playwright_e2e.rs`
+- [x] Example intent: `agents/schemas/mcp-playwright-navigate.intent.json`
+- [x] Usage: [browser-research-usage.md](browser-research-usage.md)
+- [ ] Pin `@playwright/mcp` version after first live E2E
+
+### Register (opt-in)
+
+```bash
+./scripts/register-mcp-tool.sh playwright npx -y @playwright/mcp@latest \
+  --tools browser_navigate,browser_snapshot,browser_click
+# Then set enabled = true in ~/.rmng/mcp-allowlist.toml
+```
 
 ## Rollback
 
-`enabled = false` on server block.
+`enabled = false` under `[servers.playwright]`; restart `rmngd`.
 
 ## Decision
 
-- [x] Accepted with **opt-in enable** — not on by default
+- [x] Accepted with **opt-in enable** — separate `browser-researcher` agent, not `web-researcher`

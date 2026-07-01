@@ -95,6 +95,34 @@ pub fn mock_core_intent(
             };
         }
         if a.id == "research-curator" {
+            if lower.contains("get issue") || lower.contains("issue #") {
+                let number = prompt
+                    .split_whitespace()
+                    .find_map(|w| w.trim_start_matches('#').parse::<u64>().ok())
+                    .unwrap_or(1);
+                return CoreIntent::McpProxy {
+                    mcp_server: "github".into(),
+                    mcp_tool: "get_issue".into(),
+                    mcp_args: serde_json::json!({
+                        "owner": "Ishwanku",
+                        "repo": "RMNG-OS",
+                        "issue_number": number
+                    }),
+                    metadata,
+                };
+            }
+            if lower.contains("list issues") || lower.contains("list open issues") {
+                return CoreIntent::McpProxy {
+                    mcp_server: "github".into(),
+                    mcp_tool: "list_issues".into(),
+                    mcp_args: serde_json::json!({
+                        "owner": "Ishwanku",
+                        "repo": "RMNG-OS",
+                        "state": "open"
+                    }),
+                    metadata,
+                };
+            }
             if lower.contains("search") || lower.contains("issue") {
                 return CoreIntent::McpProxy {
                     mcp_server: "github".into(),
@@ -158,7 +186,72 @@ pub fn mock_core_intent(
                 metadata,
             };
         }
+        if a.id == "browser-researcher" {
+            if lower.contains("click") {
+                return CoreIntent::McpProxy {
+                    mcp_server: "playwright".into(),
+                    mcp_tool: "browser_click".into(),
+                    mcp_args: serde_json::json!({
+                        "element": "Submit",
+                        "ref": "e1"
+                    }),
+                    metadata,
+                };
+            }
+            if lower.contains("snapshot") || lower.contains("a11y") || lower.contains("accessibility") {
+                return CoreIntent::McpProxy {
+                    mcp_server: "playwright".into(),
+                    mcp_tool: "browser_snapshot".into(),
+                    mcp_args: serde_json::json!({}),
+                    metadata,
+                };
+            }
+            if lower.contains("navigate")
+                || lower.contains("browser")
+                || lower.contains("http://")
+                || lower.contains("https://")
+            {
+                let url = prompt
+                    .split_whitespace()
+                    .find(|w| w.starts_with("http://") || w.starts_with("https://"))
+                    .unwrap_or("https://example.com");
+                return CoreIntent::McpProxy {
+                    mcp_server: "playwright".into(),
+                    mcp_tool: "browser_navigate".into(),
+                    mcp_args: serde_json::json!({ "url": url }),
+                    metadata,
+                };
+            }
+            return CoreIntent::PlanOnly {
+                reasoning: format!(
+                    "Browser research plan for: {prompt}. Requires playwright MCP (opt-in)."
+                ),
+                metadata,
+            };
+        }
         if a.id == "repo-keeper" {
+            let repo = std::env::var("HOME")
+                .map(|h| format!("{h}/dev/projects/RMNG-OS"))
+                .unwrap_or_else(|_| ".".into());
+            if lower.contains("mcp") && (lower.contains("diff") || lower.contains("changes")) {
+                return CoreIntent::McpProxy {
+                    mcp_server: "git".into(),
+                    mcp_tool: "git.diff".into(),
+                    mcp_args: serde_json::json!({
+                        "repo_path": repo,
+                        "staged": false
+                    }),
+                    metadata,
+                };
+            }
+            if lower.contains("mcp") && lower.contains("status") {
+                return CoreIntent::McpProxy {
+                    mcp_server: "git".into(),
+                    mcp_tool: "git.status".into(),
+                    mcp_args: serde_json::json!({ "repo_path": repo }),
+                    metadata,
+                };
+            }
             if lower.contains("diff") || lower.contains("changes") {
                 return CoreIntent::ToolExecute {
                     target: "git.diff".into(),
@@ -174,9 +267,6 @@ pub fn mock_core_intent(
                 };
             }
             if lower.contains("log") || lower.contains("history") || lower.contains("commits") {
-                let repo = std::env::var("HOME")
-                    .map(|h| format!("{h}/dev/projects/RMNG-OS"))
-                    .unwrap_or_else(|_| ".".into());
                 return CoreIntent::McpProxy {
                     mcp_server: "git".into(),
                     mcp_tool: "git.log".into(),

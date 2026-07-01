@@ -5,27 +5,34 @@
 | **Repository** | https://github.com/modelcontextprotocol/servers (git) |
 | **License** | MIT |
 | **Track** | **2 — MCP Proxy Plane** |
-| **Status** | **Active** |
+| **Status** | **Active** (Sprint 14 expanded) |
 
 ## Role
 
-Rich git log/history via MCP for production proxy (`git.log`).  
-Complements native `git.status` (Track 1) — does not replace it.
+Repository inspection via MCP for `repo-keeper`. Complements native Track 1 tools.
+
+## Allowed tools (Sprint 14)
+
+| Tool | Wire name | Purpose |
+|------|-----------|---------|
+| `git.log` | `git_log` | Commit history |
+| `git.diff` | `git_diff` | Working tree diff |
+| `git.status` | `git_status` | Repository status |
 
 ## Configuration
 
 ```bash
 ./scripts/register-mcp-tool.sh git uvx mcp-server-git \
   --repository ~/dev/projects/RMNG-OS \
-  --tools git.log
+  --tools git.log,git.diff,git.status
 ```
 
-Wire name mapping: `git.log` (allowlist) → `git_log` (MCP wire) via `rmng-mcp::wire_tool_name`.
+Example intents: `agents/schemas/mcp-git-diff.intent.json`, `mcp-git-status.intent.json`
 
 ## Security
 
 - Scoped to explicit `--repository` path
-- Read-oriented tool only in current allowlist
+- Read-only tools only; `git.commit` denied at gate
 
 ## Rollback
 

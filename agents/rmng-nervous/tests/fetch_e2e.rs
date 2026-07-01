@@ -166,6 +166,65 @@ async fn fetch_mcp_full_loop_when_rmngd_running() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+const SAMPLE_PDF: &str =
+    "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf";
+
+#[tokio::test]
+async fn markitdown_mcp_full_loop_when_rmngd_running() {
+    if !daemon_running() {
+        eprintln!("skip: rmngd not running");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rmng-md-loop-{}", uuid::Uuid::new_v4()));
+    let store = SessionStore::new(&dir);
+    let session = store.create().expect("create");
+
+    let mut intent = CoreIntent::McpProxy {
+        mcp_server: "markitdown".into(),
+        mcp_tool: "convert_to_markdown".into(),
+        mcp_args: serde_json::json!({"uri": SAMPLE_PDF}),
+        metadata: None,
+    };
+    AgentRouter::enrich_intent_metadata(&mut intent, Some(&session.id), Some("web-researcher"));
+
+    let gate = PermissionGate::default();
+    if matches!(gate.evaluate_core(&intent), PermissionVerdict::Deny(_)) {
+        eprintln!("skip: markitdown MCP not in allowlist");
+        let _ = std::fs::remove_dir_all(dir);
+        return;
+    }
+
+    let json = serde_json::to_string(&intent).expect("serialize");
+    let line = send_intent_json(&json).await.expect("send");
+    let resp: HandleResponse = serde_json::from_str(line.trim()).expect("parse response");
+
+    persist_dispatch_to_session(&store, &session.id, &intent, &resp).expect("write-back");
+
+    let loaded = store.load(&session.id).expect("load");
+    let results = loaded
+        .shared_context
+        .get("tool_results")
+        .and_then(|v| v.as_array());
+    assert!(
+        results.is_some_and(|r| !r.is_empty()),
+        "markitdown result should be written to shared_context"
+    );
+
+    let record = results.unwrap().last().unwrap();
+    assert_eq!(
+        record.get("tool").and_then(|v| v.as_str()),
+        Some("markitdown.convert_to_markdown")
+    );
+
+    let ctx = loaded.prompt_context();
+    assert!(
+        ctx.contains("markitdown") || ctx.contains("convert_to_markdown"),
+        "session context should include markitdown output"
+    );
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn web_researcher_agent_policy_allows_fetch_and_markitdown() {
     let reg = rmng_nervous::AgentRegistry::load().expect("registry");

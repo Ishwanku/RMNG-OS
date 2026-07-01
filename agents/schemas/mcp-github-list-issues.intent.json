@@ -1,0 +1,15 @@
+{
+  "schema_version": "2",
+  "action": "mcp.proxy",
+  "server": "github",
+  "tool": "list_issues",
+  "params": {
+    "owner": "Ishwanku",
+    "repo": "RMNG-OS",
+    "state": "open"
+  },
+  "metadata": {
+    "agent_id": "research-curator",
+    "reason": "list open issues smoke test"
+  }
+}

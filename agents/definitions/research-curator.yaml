@@ -10,5 +10,6 @@ allowed_native_tools:
   - github.pr_status
 allowed_mcp_tools:
   - github:search_issues
+  - github:list_issues
   - github:get_issue
 delegates_to: []

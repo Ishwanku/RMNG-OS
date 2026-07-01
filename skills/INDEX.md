@@ -10,6 +10,7 @@ Intent-shaping guides for the nervous system (BYO-LLM). **Do not execute tools d
 | GitHub workflow | [github-workflow/SKILL.md](github-workflow/SKILL.md) | PR status, `gh` context, and MCP `git.log` for commit history |
 | Phase gates | [phase-gates/SKILL.md](phase-gates/SKILL.md) | Phase completion checks against `docs/ROADMAP.md` success criteria |
 | TDD discipline | [tdd-discipline/SKILL.md](tdd-discipline/SKILL.md) | Red-green-refactor phase gates (superpowers-adapted) |
+| Browser research | [browser-research/SKILL.md](browser-research/SKILL.md) | Opt-in Playwright MCP (DOM navigation) |
 | Web research | [web-research/SKILL.md](web-research/SKILL.md) | MCP fetch for live URLs |
 | Doc ingestion | [doc-ingestion/SKILL.md](doc-ingestion/SKILL.md) | Markitdown MCP for PDF/Office files |
 | Doc summarization | [doc-summarization/SKILL.md](doc-summarization/SKILL.md) | Session-aware synthesis of tool results |

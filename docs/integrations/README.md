@@ -13,6 +13,10 @@ Per-repository evaluation records for open-source AI/agent/MCP projects consider
 | [mcp-fetch.md](mcp-fetch.md) | `@modelcontextprotocol/server-fetch` | 2 — MCP Proxy | **Active** (Sprint 13 E2E) |
 | [markitdown-mcp.md](markitdown-mcp.md) | `markitdown-mcp` | 2 — MCP Proxy | **Active** (Sprint 13) |
 | [web-research-usage.md](web-research-usage.md) | — | Guide | **Active** |
+| [browser-research-usage.md](browser-research-usage.md) | — | Guide | **Active** (Sprint 14) |
+| [code-workflow-usage.md](code-workflow-usage.md) | — | Guide | **Active** (Sprint 14) |
+| [browser-research-usage.md](browser-research-usage.md) | — | Guide | **Active** (Sprint 14) |
+| [code-workflow-usage.md](code-workflow-usage.md) | — | Guide | **Active** (Sprint 14) |
 | [playwright-mcp.md](playwright-mcp.md) | `@playwright/mcp` | 2 — MCP Proxy | **Active** (opt-in) |
 | [superpowers-skill.md](superpowers-skill.md) | `obra/superpowers` | 3 — Skill | **Active** (adapted) |
 | [context7-rejected.md](context7-rejected.md) | `upstash/context7` | 4 — Rejected | **Rejected** |

@@ -1,0 +1,13 @@
+{
+  "schema_version": "2",
+  "action": "mcp.proxy",
+  "server": "playwright",
+  "tool": "browser_navigate",
+  "params": {
+    "url": "https://example.com"
+  },
+  "metadata": {
+    "agent_id": "browser-researcher",
+    "reason": "opt-in browser navigation smoke test"
+  }
+}

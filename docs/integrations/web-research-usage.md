@@ -57,3 +57,5 @@ tail ~/.rmng/logs/audit.jsonl | grep mcp.proxy
 ```bash
 cd agents && cargo test -p rmng-nervous --test fetch_e2e -- --nocapture
 ```
+
+Live markitdown loop: `cargo test -p rmng-nervous --test fetch_e2e markitdown_mcp_full_loop`

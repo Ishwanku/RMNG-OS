@@ -128,7 +128,7 @@ mod tests {
                 enabled: true,
                 command: "uvx".into(),
                 args: vec!["mcp-server-git".into()],
-                allowed_tools: vec!["git.log".into()],
+                allowed_tools: vec!["git.log".into(), "git.diff".into(), "git.status".into()],
                 isolation: None,
             },
         );
@@ -175,7 +175,7 @@ mod tests {
                 enabled: true,
                 command: "npx".into(),
                 args: vec!["@github/github-mcp-server".into()],
-                allowed_tools: vec!["search_issues".into(), "get_issue".into()],
+                allowed_tools: vec!["search_issues".into(), "list_issues".into(), "get_issue".into()],
                 isolation: None,
             },
         );
@@ -268,6 +268,66 @@ mod tests {
             mcp_server: "markitdown".into(),
             mcp_tool: "convert_to_markdown".into(),
             mcp_args: serde_json::json!({"uri": "https://example.com/doc.pdf"}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
+    }
+
+    #[test]
+    fn allows_mcp_github_list_issues() {
+        let gate = test_gate_with_github_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "github".into(),
+            mcp_tool: "list_issues".into(),
+            mcp_args: serde_json::json!({"owner": "Ishwanku", "repo": "RMNG-OS"}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
+    }
+
+    #[test]
+    fn allows_mcp_github_get_issue() {
+        let gate = test_gate_with_github_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "github".into(),
+            mcp_tool: "get_issue".into(),
+            mcp_args: serde_json::json!({"owner": "Ishwanku", "repo": "RMNG-OS", "issue_number": 1}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
+    }
+
+    #[test]
+    fn denies_mcp_github_create_issue() {
+        let gate = test_gate_with_github_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "github".into(),
+            mcp_tool: "create_issue".into(),
+            mcp_args: serde_json::json!({}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Deny(_)));
+    }
+
+    #[test]
+    fn allows_mcp_git_diff() {
+        let gate = test_gate_with_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "git".into(),
+            mcp_tool: "git.diff".into(),
+            mcp_args: serde_json::json!({"repo_path": "/tmp/repo"}),
+            metadata: None,
+        };
+        assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));
+    }
+
+    #[test]
+    fn allows_mcp_git_status() {
+        let gate = test_gate_with_mcp();
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "git".into(),
+            mcp_tool: "git.status".into(),
+            mcp_args: serde_json::json!({"repo_path": "/tmp/repo"}),
             metadata: None,
         };
         assert!(matches!(gate.evaluate_core(&intent), PermissionVerdict::Allow));

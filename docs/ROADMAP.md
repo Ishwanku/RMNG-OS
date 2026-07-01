@@ -154,6 +154,7 @@ Multi-agent routing, layer model, session store, swarm handoffs.
 | **Sprint 11** | ✅ | Editable catalog pricing, `rmng observe --cost` rollups, persistent circuit breaker, budget warn/deny, `rmng audit verify`, ADR-021 |
 | **Sprint 12** | ✅ | Controlled external integration — MCP fetch/playwright, skills batch, integration roadmap, per-agent budgets |
 | **Sprint 13** | ✅ | Web & research capability — fetch E2E, markitdown MCP, web-researcher skills, usage docs |
+| **Sprint 14** | ✅ | Browser + code workflow — Playwright opt-in E2E, GitHub/Git MCP expand, markitdown live E2E |
 
 See [ADR-017](decisions/ADR-017-multi-level-agent-architecture.md) · [ADR-020](decisions/ADR-020-linux-aligned-runtime-hardening.md) · [ADR-021](decisions/ADR-021-cost-governance.md) · [INTEGRATION-ROADMAP.md](INTEGRATION-ROADMAP.md).
 

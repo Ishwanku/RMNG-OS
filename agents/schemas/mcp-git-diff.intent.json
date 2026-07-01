@@ -1,0 +1,14 @@
+{
+  "schema_version": "2",
+  "action": "mcp.proxy",
+  "server": "git",
+  "tool": "git.diff",
+  "params": {
+    "repo_path": "/home/saini/dev/projects/RMNG-OS",
+    "staged": false
+  },
+  "metadata": {
+    "agent_id": "repo-keeper",
+    "reason": "git diff via MCP smoke test"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": "2",
+  "action": "mcp.proxy",
+  "server": "git",
+  "tool": "git.status",
+  "params": {
+    "repo_path": "/home/saini/dev/projects/RMNG-OS"
+  },
+  "metadata": {
+    "agent_id": "repo-keeper",
+    "reason": "git status via MCP smoke test"
+  }
+}

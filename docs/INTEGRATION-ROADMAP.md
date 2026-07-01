@@ -29,12 +29,12 @@ The GitHub Repos analysis (130+ entries) clusters into:
 | Priority | Repository | Track | Exposure | Effort | Risk | Status |
 |----------|------------|-------|----------|--------|------|--------|
 | A1 | [modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers) (`fetch`) | 2 | `mcp.proxy` → read-only URL fetch | S | Low | **Active** |
-| A2 | [microsoft/playwright-mcp](https://github.com/microsoft/playwright-mcp) | 2 | `mcp.proxy` → DOM/a11y tree navigation | M | Med | **Active** |
-| A3 | [microsoft/markitdown](https://github.com/microsoft/markitdown) | 2 | `mcp.proxy` → doc→markdown for context | M | Low | **Evaluating** |
+| A2 | [microsoft/playwright-mcp](https://github.com/microsoft/playwright-mcp) | 2 | `mcp.proxy` → DOM/a11y tree navigation | M | Med | **Active** (Sprint 14 E2E) |
+| A3 | [microsoft/markitdown](https://github.com/microsoft/markitdown) | 2 | `mcp.proxy` → doc→markdown for context | M | Low | **Active** |
 | A4 | [obra/superpowers](https://github.com/obra/superpowers) | 3 | `skills/tdd-discipline` — phase-gated TDD | S | Low | **Active** |
 | A5 | [anthropics/skills](https://github.com/anthropics/skills) | 3 | Selective skill adaptation (spec format) | S | Low | **Active** |
-| A6 | [github/github-mcp-server](https://github.com/github/github-mcp-server) | 2 | Expand allowlist (`list_issues`, `search_code`) | S | Low | **Planned** |
-| A7 | [mcp-server-git](https://github.com/modelcontextprotocol/servers/tree/main/src/git) | 2 | Expand tools (`git.diff`, `git.status`) | S | Low | **Planned** |
+| A6 | [github/github-mcp-server](https://github.com/github/github-mcp-server) | 2 | Read-only issue tools (`list_issues`, `get_issue`) | S | Low | **Active** (Sprint 14) |
+| A7 | [mcp-server-git](https://github.com/modelcontextprotocol/servers/tree/main/src/git) | 2 | Expand tools (`git.diff`, `git.status`) | S | Low | **Active** (Sprint 14) |
 
 ### Phase A rejections (documented, not wired)
 
@@ -113,3 +113,13 @@ The GitHub Repos analysis (130+ entries) clusters into:
 5. **Never batch-allowlist** — explicit `allowed_tools` per server
 
 See [integrations/README.md](integrations/README.md) for per-repo intake records.
+
+## Sprint 14 Status
+
+| Item | Track | Deliverable | Status |
+|------|-------|-------------|--------|
+| Playwright MCP | 2 | opt-in E2E + isolation + browser-researcher | ✅ Complete |
+| GitHub MCP expand | 2 | list_issues, get_issue; create_issue removed | ✅ Complete |
+| Git MCP expand | 2 | git.diff, git.status + repo-keeper scope | ✅ Complete |
+| Markitdown live E2E | 2 | rmngd full loop + session write-back | ✅ Complete |
+| Usage docs | — | browser-research, code-workflow guides | ✅ Complete |

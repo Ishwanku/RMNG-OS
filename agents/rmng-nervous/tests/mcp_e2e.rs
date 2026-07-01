@@ -141,3 +141,90 @@ fn research_curator_agent_policy_allows_search_issues() {
     };
     assert!(agent.allows_core_intent(&intent).is_ok());
 }
+
+#[tokio::test]
+async fn research_curator_generates_list_issues_intent() {
+    let dir = std::env::temp_dir().join(format!("rmng-list-issues-{}", uuid::Uuid::new_v4()));
+    let store = SessionStore::new(&dir);
+    let session = store.create().expect("create");
+    let router = test_router(store);
+    let outcome = router
+        .ask_routed(
+            Some(&session.id),
+            "research-curator",
+            "list open issues in RMNG-OS",
+        )
+        .await
+        .expect("ask");
+    match outcome.intent() {
+        CoreIntent::McpProxy {
+            mcp_server,
+            mcp_tool,
+            ..
+        } => {
+            assert_eq!(mcp_server, "github");
+            assert_eq!(mcp_tool, "list_issues");
+        }
+        CoreIntent::PlanOnly { .. } => {}
+        other => panic!("unexpected intent: {other:?}"),
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn repo_keeper_generates_git_diff_mcp_intent() {
+    let dir = std::env::temp_dir().join(format!("rmng-git-diff-{}", uuid::Uuid::new_v4()));
+    let store = SessionStore::new(&dir);
+    let session = store.create().expect("create");
+    let router = test_router(store);
+    let outcome = router
+        .ask_routed(
+            Some(&session.id),
+            "repo-keeper",
+            "show mcp git diff for working tree changes",
+        )
+        .await
+        .expect("ask");
+    match outcome.intent() {
+        CoreIntent::McpProxy {
+            mcp_server,
+            mcp_tool,
+            ..
+        } => {
+            assert_eq!(mcp_server, "git");
+            assert_eq!(mcp_tool, "git.diff");
+        }
+        other => panic!("unexpected intent: {other:?}"),
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn research_curator_agent_policy_allows_list_and_get_issue() {
+    let reg = rmng_nervous::AgentRegistry::load().expect("registry");
+    let agent = reg.get("research-curator").expect("agent");
+    for tool in ["list_issues", "get_issue"] {
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "github".into(),
+            mcp_tool: tool.into(),
+            mcp_args: serde_json::json!({}),
+            metadata: None,
+        };
+        assert!(agent.allows_core_intent(&intent).is_ok(), "allow {tool}");
+    }
+}
+
+#[test]
+fn repo_keeper_agent_policy_allows_git_mcp_tools() {
+    let reg = rmng_nervous::AgentRegistry::load().expect("registry");
+    let agent = reg.get("repo-keeper").expect("agent");
+    for tool in ["git.log", "git.diff", "git.status"] {
+        let intent = CoreIntent::McpProxy {
+            mcp_server: "git".into(),
+            mcp_tool: tool.into(),
+            mcp_args: serde_json::json!({}),
+            metadata: None,
+        };
+        assert!(agent.allows_core_intent(&intent).is_ok(), "allow {tool}");
+    }
+}
